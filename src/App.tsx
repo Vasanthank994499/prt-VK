@@ -24,7 +24,7 @@ import {
   Github
 } from 'lucide-react';
 
-import { supabase, hasSupabaseConfig } from './supabase';
+import { supabase, hasSupabaseConfig, updateSupabaseCredentials, clearSupabaseCredentials } from './supabase';
 
 
 // Custom interface for Work items
@@ -292,10 +292,36 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [authTab, setAuthTab] = useState<'github' | 'password'>('github');
   const [githubAuthError, setGithubAuthError] = useState<string>('');
+  const [inputUrl, setInputUrl] = useState(() => localStorage.getItem('VITE_SUPABASE_URL') || '');
+  const [inputKey, setInputKey] = useState(() => localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
+  const [isConfiguredState, setIsConfiguredState] = useState(() => hasSupabaseConfig());
   const [authEmail, setAuthEmail] = useState('vasanthankasvk@gmail.com');
   const [authPassword, setAuthPassword] = useState('');
   const [cloudAuthError, setCloudAuthError] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
+
+  const handleConnectSupabase = (e: React.FormEvent) => {
+    e.preventDefault();
+    setGithubAuthError('');
+    const success = updateSupabaseCredentials(inputUrl, inputKey);
+    if (success) {
+      setIsConfiguredState(true);
+      fetchWorks();
+    } else {
+      setGithubAuthError('Connection failed: invalid credentials format. Make sure the URL starts with https:// and the Anon key is a valid JWT token.');
+    }
+  };
+
+  const handleDisconnectSupabase = () => {
+    clearSupabaseCredentials();
+    setIsConfiguredState(false);
+    setInputUrl('');
+    setInputKey('');
+    setGithubAuthError('');
+    setIsAdmin(false);
+    localStorage.removeItem('is_admin_v2');
+    supabase.auth.signOut();
+  };
   
   // Storage upload overlays
   const [isUploading, setIsUploading] = useState(false);
@@ -419,7 +445,7 @@ export default function App() {
   // Robust GitHub Sign-In with Supabase redirect
   const attemptGithubSignIn = async (): Promise<boolean> => {
     setGithubAuthError('');
-    if (!hasSupabaseConfig) {
+    if (!hasSupabaseConfig()) {
       setGithubAuthError('Supabase credentials are not configured. Redirecting to Supabase Dashboard...');
       window.open('https://supabase.com/dashboard/org/kaililoekwqkdcixgqfm', '_blank');
       return false;
@@ -2516,60 +2542,115 @@ export default function App() {
 
             {authTab === 'github' ? (
               <div className="p-5 flex flex-col gap-4">
-                <div className="text-[10px] text-zinc-500 font-mono text-center tracking-wide uppercase leading-normal">
-                  Authenticate via GitHub OAuth to sync uploads and manage the live portfolio database.
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const success = await attemptGithubSignIn();
-                      if (success) {
-                        setIsAdminAuthOpen(false);
-                      }
-                    }}
-                    className="w-full py-2.5 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[10px] rounded flex items-center justify-center gap-2 transition-transform active:scale-98 cursor-pointer uppercase shadow-lg shadow-green-500/10"
-                  >
-                    <Github className="w-4 h-4 text-black" />
-                    SIGN IN WITH GITHUB
-                  </button>
-
-                  {githubAuthError && (
-                    <div className="mt-2 text-amber-500 font-mono text-[7.5px] text-center border border-amber-500/10 bg-amber-950/20 p-2 rounded leading-normal flex flex-col gap-1.5">
-                      <div>⚠️ {githubAuthError}</div>
-                      {!hasSupabaseConfig && (
-                        <a
-                          href="https://supabase.com/dashboard/org/kaililoekwqkdcixgqfm"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-1 w-full py-1 text-center bg-amber-500 text-black font-extrabold uppercase rounded text-[7.5px] cursor-pointer block transition-colors hover:bg-amber-400"
-                        >
-                          Open Supabase Org Dashboard ↗
-                        </a>
-                      )}
-                    </div>
-                  )}
-
-                  {!hasSupabaseConfig && !githubAuthError && (
-                    <div className="mt-2 text-zinc-500 font-mono text-[8px] text-center border border-zinc-800/40 bg-zinc-900/10 p-2.5 rounded-lg leading-normal flex flex-col gap-1.5">
-                      <div className="text-amber-500 font-bold uppercase text-[7.5px]">⚠️ Supabase connection pending</div>
-                      <div>VITE_SUPABASE_URL and key are not set on host.</div>
-                      <a
-                        href="https://supabase.com/dashboard/org/kaililoekwqkdcixgqfm"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="w-full py-1 text-center bg-zinc-900 border border-zinc-800 text-zinc-300 font-extrabold uppercase rounded text-[7px] cursor-pointer block transition-colors hover:bg-zinc-800"
+                {isConfiguredState ? (
+                  <div className="flex flex-col gap-4">
+                    {/* Status Badge: Connected */}
+                    <div className="border border-green-500/20 bg-green-950/20 px-3 py-2 rounded-lg flex justify-between items-center animate-fade-in">
+                      <div className="flex items-center gap-1.5 text-[#00ff00] font-mono text-[9px] font-extrabold uppercase tracking-wider">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] animate-pulse"></span>
+                        ✓ Connected to Supabase
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleDisconnectSupabase}
+                        className="text-[7.5px] text-zinc-500 hover:text-red-400 font-mono underline uppercase cursor-pointer"
                       >
-                        Open Supabase Org Dashboard ↗
-                      </a>
+                        [Disconnect]
+                      </button>
                     </div>
-                  )}
 
-                  <div className="text-zinc-650 font-mono text-[7px] text-center mt-2 leading-normal border-t border-zinc-900 pt-2">
-                    GitHub login redirects to Supabase for secure admin validation.
+                    {currentUser && isUserAdmin(currentUser) ? (
+                      <div className="border border-green-500/20 bg-green-950/20 px-3 py-2.5 rounded-lg text-center flex flex-col gap-1 text-[#00ff00] font-mono text-[9.5px] font-extrabold uppercase tracking-widest animate-scale-up">
+                        <span>✓ Authenticated successfully</span>
+                        <span className="text-[7.5px] text-zinc-400 font-normal mt-0.5">Admin access is active. You can now upload and delete videos.</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <div className="text-[9.5px] text-zinc-400 font-mono text-center mb-1">
+                          Supabase link is active. Please authenticate using GitHub to enable database sync:
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const success = await attemptGithubSignIn();
+                            if (success) {
+                              setIsAdminAuthOpen(false);
+                            }
+                          }}
+                          className="w-full py-2.5 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[10px] rounded flex items-center justify-center gap-2 transition-transform active:scale-98 cursor-pointer uppercase shadow-lg shadow-green-500/10"
+                        >
+                          <Github className="w-4 h-4 text-black" />
+                          SIGN IN WITH GITHUB
+                        </button>
+                      </div>
+                    )}
+
+                    {githubAuthError && (
+                      <div className="mt-1 text-red-500 font-mono text-[8px] text-center border border-red-500/10 bg-red-950/20 p-2 rounded leading-normal">
+                        ⚠️ {githubAuthError}
+                      </div>
+                    )}
                   </div>
-                </div>
+                ) : (
+                  <form onSubmit={handleConnectSupabase} className="flex flex-col gap-3 animate-fade-in">
+                    <div className="text-[9.5px] text-zinc-400 font-mono text-center leading-normal">
+                      Enter your Supabase project API credentials below to connect the database and enable live video uploads.
+                    </div>
+
+                    <div className="flex flex-col gap-2.5">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[7.5px] text-zinc-400 font-mono uppercase tracking-[0.2em]">
+                            Supabase URL
+                          </label>
+                          <a
+                            href="https://supabase.com/dashboard/org/kaililoekwqkdcixgqfm"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[7.5px] text-[#00ff00] hover:underline font-mono"
+                          >
+                            Find credentials ↗
+                          </a>
+                        </div>
+                        <input
+                          type="url"
+                          required
+                          placeholder="https://your-project.supabase.co"
+                          value={inputUrl}
+                          onChange={(e) => setInputUrl(e.target.value)}
+                          className="bg-black border border-[#222] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono bg-zinc-950"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[7.5px] text-[#00ff00] font-mono uppercase tracking-[0.2em]">
+                          Supabase Anon Key
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                          value={inputKey}
+                          onChange={(e) => setInputKey(e.target.value)}
+                          className="bg-black border border-[#222] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono bg-zinc-950"
+                        />
+                      </div>
+                    </div>
+
+                    {githubAuthError && (
+                      <div className="mt-1 text-red-500 font-mono text-[8px] text-center border border-red-500/10 bg-red-950/20 p-2 rounded leading-normal">
+                        ⚠️ {githubAuthError}
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      className="w-full py-2 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[9px] rounded transition-transform active:scale-98 cursor-pointer uppercase mt-1"
+                    >
+                      Connect & Validate Supabase
+                    </button>
+                  </form>
+                )}
 
                 <div className="flex gap-2 pt-2 border-t border-[#1a1a1a] mt-1">
                   <button
