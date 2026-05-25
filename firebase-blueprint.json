@@ -1,0 +1,81 @@
+{
+  "entities": {
+    "Profile": {
+      "title": "Profile",
+      "description": "The administrative profile metadata such as custom avatar image",
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "string",
+          "description": "Base64 or URL string of the custom profile avatar image"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Firestore server timestamp of update"
+        }
+      },
+      "required": ["image", "updatedAt"]
+    },
+    "WorkItem": {
+      "title": "WorkItem",
+      "description": "Vasanthan's portfolio creative video work item",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the work item"
+        },
+        "title": {
+          "type": "string",
+          "description": "Capitalized visual title of the production work"
+        },
+        "category": {
+          "type": "string",
+          "description": "Underlying creative genre/category (e.g., Social Motion)"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["vertical", "landscape", "normal"],
+          "description": "Orientation aspect ratio layout mode"
+        },
+        "videoUrl": {
+          "type": "string",
+          "description": "Public video URL"
+        },
+        "thumbnailUrl": {
+          "type": "string",
+          "description": "Public image thumbnail URL"
+        },
+        "duration": {
+          "type": "string",
+          "description": "Visual elapsed video playtime (e.g. 0:30)"
+        },
+        "softwareUsed": {
+          "type": "array",
+          "description": "List of industry creative software tags"
+        },
+        "description": {
+          "type": "string",
+          "description": "Underlying meta narration text"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of work item creation"
+        }
+      },
+      "required": ["id", "title", "category", "type", "videoUrl", "thumbnailUrl", "duration", "softwareUsed", "description", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/profile/{profileId}": {
+      "schema": "Profile",
+      "description": "Collection storing the editable profile attributes of the landing page"
+    },
+    "/works/{workId}": {
+      "schema": "WorkItem",
+      "description": "Collection storing the list of portfolio works showcased"
+    }
+  }
+}

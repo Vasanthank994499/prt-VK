@@ -23,6 +23,11 @@ import {
   Sparkles
 } from 'lucide-react';
 
+import { db, auth, handleFirestoreError, OperationType } from './firebase';
+import { doc, setDoc, deleteDoc, collection, onSnapshot, getDocs, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+
+
 // Custom interface for Work items
 interface WorkItem {
   id: string;
@@ -245,7 +250,7 @@ const renderCategoryIcon = (iconName: string) => {
 const DEFAULT_AVATAR_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="100%" height="100%"><defs><radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="%2300ff00" stop-opacity="0.15"/><stop offset="100%" stop-color="%23000000" stop-opacity="0"/></radialGradient></defs><rect width="120" height="120" fill="%23030303"/><circle cx="60" cy="60" r="50" fill="url(%23glow)"/><circle cx="60" cy="60" r="45" fill="none" stroke="%23111" stroke-width="1"/><circle cx="60" cy="60" r="45" fill="none" stroke="%2300ff00" stroke-width="1.5" stroke-dasharray="20 10 5 10"/><path d="M35 110 C 35 90, 45 80, 60 80 C 75 80, 85 90, 85 110 Z" fill="%23ffffff" stroke="%23e0e0e0" stroke-width="1"/><path d="M50 80 L 60 93 L 70 80" fill="none" stroke="%23ccc" stroke-width="1.5"/><path d="M60 93 L 60 110" fill="none" stroke="%23ccc" stroke-width="1" stroke-dasharray="2 2"/><path d="M53 70 L 53 82 C 53 82, 60 85, 67 82 L 67 70 Z" fill="%23d4a373"/><path d="M48 48 C 48 38, 72 38, 72 48 C 72 58, 68 68, 60 68 C 52 68, 48 58, 48 48 Z" fill="%23e9c46a"/><circle cx="48" cy="50" r="4" fill="%23e9c46a"/><path d="M47 43 C 47 33, 73 31, 73 41 C 70 38, 55 35, 47 43 Z" fill="%23111111"/><path d="M48 44 C 45 46, 45 35, 60 32 C 75 29, 73 38, 73 42 C 73 42, 64 36, 48 44 Z" fill="%231c1c1c"/><path d="M48 50 C 48 62, 53 72, 60 72 C 67 72, 72 62, 72 50 C 72 54, 70 66, 60 67 C 50 66, 48 54, 48 50 Z" fill="%231c1c1c"/><path d="M51 58 C 55 60, 65 60, 69 58 C 71 63, 67 71, 60 71 C 53 71, 49 63, 51 58 Z" fill="%23111111"/><path d="M54 55 Q 60 58 66 55" fill="none" stroke="%23111111" stroke-width="2.5"/><path d="M58 45 Q 61 44 64 45" fill="none" stroke="%23111111" stroke-width="1.5"/><circle cx="61" cy="48" r="1.5" fill="%23111111"/><path d="M15 35 L 15 20 L 30 20" fill="none" stroke="%2300ff00" stroke-width="1" stroke-opacity="0.6"/><path d="M105 35 L 105 20 L 90 20" fill="none" stroke="%2300ff00" stroke-width="1" stroke-opacity="0.6"/><path d="M15 85 L 15 100 L 30 100" fill="none" stroke="%2300ff00" stroke-width="1" stroke-opacity="0.6"/><path d="M105 85 L 105 100 L 90 100" fill="none" stroke="%2300ff00" stroke-width="1" stroke-opacity="0.6"/></svg>`;
 
 export default function App() {
-  const [works, setWorks] = useState<WorkItem[]>(INITIAL_WORKS);
+  const [works, setWorks] = useState<WorkItem[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'landscape' | 'vertical' | 'normal'>('all');
   const [selectedSoftware, setSelectedSoftware] = useState<string | null>(null);
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
@@ -273,6 +278,77 @@ export default function App() {
   const [passcodeInput, setPasscodeInput] = useState('');
   const [authError, setAuthError] = useState('');
 
+  // 1. Firebase Auth state changed observer
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && user.email === 'vasanthankasvk@gmail.com' && user.emailVerified) {
+        setIsAdmin(true);
+        localStorage.setItem('is_admin_v2', 'true');
+      } else {
+        if (user) {
+          setIsAdmin(false);
+          localStorage.removeItem('is_admin_v2');
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Real-time Works synchronization listener hook
+  useEffect(() => {
+    const q = collection(db, 'works');
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list: any[] = [];
+      snapshot.forEach((docRef) => {
+        const data = docRef.data();
+        list.push({
+          id: docRef.id,
+          title: data.title || '',
+          category: data.category || '',
+          type: data.type || 'normal',
+          videoUrl: data.videoUrl || '',
+          thumbnailUrl: data.thumbnailUrl || '',
+          duration: data.duration || '',
+          softwareUsed: data.softwareUsed || [],
+          description: data.description || '',
+          createdAt: data.createdAt,
+        });
+      });
+
+      // Sort by createdAt descending securely
+      list.sort((a, b) => {
+        const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : Date.now();
+        const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : Date.now();
+        return timeB - timeA;
+      });
+
+      if (list.length === 0) {
+        setWorks(INITIAL_WORKS);
+      } else {
+        setWorks(list);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'works');
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // 3. Real-time Profile Avatar synchronization listener hook
+  useEffect(() => {
+    const unsubscribe = onSnapshot(doc(db, 'profile', 'main'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.image) {
+          setProfileImage(data.image);
+        }
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'profile/main');
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Auto-login via URL Query parameters (e.g. ?admin=true or ?admin=vk)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -297,19 +373,35 @@ export default function App() {
     }
   };
 
-  const handleAdminLogout = () => {
+  const handleAdminLogout = async () => {
     setIsAdmin(false);
     localStorage.removeItem('is_admin_v2');
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleProfileImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onloadend = async () => {
         const base64String = reader.result as string;
         setProfileImage(base64String);
         localStorage.setItem('vasanthan_profile_img', base64String);
+
+        if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
+          try {
+            await setDoc(doc(db, 'profile', 'main'), {
+              image: base64String,
+              updatedAt: serverTimestamp()
+            });
+          } catch (err) {
+            handleFirestoreError(err, OperationType.WRITE, 'profile/main');
+          }
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -511,7 +603,16 @@ export default function App() {
   };
 
   // Reset to initial list
-  const handleResetWorks = () => {
+  const handleResetWorks = async () => {
+    if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
+      try {
+        const snapshot = await getDocs(collection(db, 'works'));
+        const batchPromises = snapshot.docs.map((d) => deleteDoc(d.ref));
+        await Promise.all(batchPromises);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, 'works');
+      }
+    }
     setWorks(INITIAL_WORKS);
     setActiveTab('all');
     setSelectedSoftware(null);
@@ -564,7 +665,7 @@ export default function App() {
   };
 
   // Create & Insert New Work Item
-  const handleCreateWorkItem = (e: React.FormEvent) => {
+  const handleCreateWorkItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
@@ -586,8 +687,9 @@ export default function App() {
       suggestedSoftware = ['DaVinci Resolve'];
     }
 
-    const customNewItem: WorkItem = {
-      id: `custom-work-${Date.now()}`,
+    const customId = `custom-work-${Date.now()}`;
+    const customNewItem: any = {
+      id: customId,
       title: newTitle.toUpperCase(),
       category: newCategory,
       type: newType,
@@ -595,10 +697,20 @@ export default function App() {
       thumbnailUrl: finalThumbnailUrl,
       duration: '0:30',
       softwareUsed: suggestedSoftware,
-      description: newDescription.trim() || `Custom media uploaded via Vasanthan Portfolio Workspace.`
+      description: newDescription.trim() || `Custom media uploaded via Vasanthan Portfolio Workspace.`,
+      createdAt: serverTimestamp()
     };
 
-    setWorks((prev) => [customNewItem, ...prev]);
+    if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
+      try {
+        await setDoc(doc(db, 'works', customId), customNewItem);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, `works/${customId}`);
+      }
+    } else {
+      // Offline / unauthenticated local state preview
+      setWorks((prev) => [customNewItem, ...prev]);
+    }
     
     setNewTitle('');
     setNewCategory('Social Motion Design');
@@ -609,9 +721,17 @@ export default function App() {
     setIsUploadOpen(false);
   };
 
-  const handleDeleteWorkItem = (id: string, e: React.MouseEvent) => {
+  const handleDeleteWorkItem = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation(); 
-    setWorks((prev) => prev.filter(w => w.id !== id));
+    if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
+      try {
+        await deleteDoc(doc(db, 'works', id));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `works/${id}`);
+      }
+    } else {
+      setWorks((prev) => prev.filter(w => w.id !== id));
+    }
     if (activeLightboxProject?.id === id) {
       setActiveLightboxProject(null);
     }
@@ -977,9 +1097,19 @@ export default function App() {
                     Copy Global Code
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       localStorage.removeItem('vasanthan_profile_img');
                       setProfileImage(DEFAULT_AVATAR_SVG);
+                      if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
+                        try {
+                          await setDoc(doc(db, 'profile', 'main'), {
+                            image: DEFAULT_AVATAR_SVG,
+                            updatedAt: serverTimestamp()
+                          });
+                        } catch (err) {
+                          handleFirestoreError(err, OperationType.WRITE, 'profile/main');
+                        }
+                      }
                       alert("Local profile image override cleared. Restored to system default!");
                     }}
                     className="mt-1 w-full py-0.5 bg-red-950/30 border border-red-900/40 hover:bg-red-600 hover:text-white transition-all rounded text-[7.5px] font-mono uppercase font-black cursor-pointer"
@@ -2080,6 +2210,57 @@ export default function App() {
                   className="flex-1 py-1.5 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[10px] rounded transition-transform active:scale-98 cursor-pointer"
                 >
                   VALIDATE
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-2 border-t border-[#1a1a1a] pt-4 mt-1">
+                <div className="text-[8px] text-zinc-500 font-mono text-center uppercase tracking-widest mb-1 font-bold">
+                  — OR CONNECT CLOUD PERSISTENCE —
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const provider = new GoogleAuthProvider();
+                      const result = await signInWithPopup(auth, provider);
+                      const user = result.user;
+                      if (user.email === 'vasanthankasvk@gmail.com' && user.emailVerified) {
+                        setIsAdmin(true);
+                        localStorage.setItem('is_admin_v2', 'true');
+                        setIsAdminAuthOpen(false);
+                        alert(`ACCESS GRANTED: Authenticated as ${user.email}. Live Firestore write integration is fully activated!`);
+                      } else {
+                        alert(`ACCESS DENIED: Authenticated as ${user.email || 'anonymous'}. Only the portfolio administrator (vasanthankasvk@gmail.com) is allowed write permissions.`);
+                        await signOut(auth);
+                        setIsAdmin(false);
+                        localStorage.removeItem('is_admin_v2');
+                      }
+                    } catch (err) {
+                      console.error("Sign-in error", err);
+                      setAuthError(err instanceof Error ? err.message : "Sign-in exception");
+                    }
+                  }}
+                  className="w-full py-2 bg-white hover:bg-zinc-200 text-black font-extrabold font-mono text-[9px] rounded flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.85c.87-2.6 3.3-4.53 6.16-4.53z"
+                    />
+                  </svg>
+                  SIGN IN WITH GOOGLE (OWNER)
                 </button>
               </div>
 
