@@ -2514,213 +2514,169 @@ export default function App() {
               </button>
             </div>
 
-            {/* TAB SELECTORS */}
-            <div className="flex border-b border-[#1a1a1a] bg-[#0c0c0c]">
-              <button
-                type="button"
-                onClick={() => setAuthTab('github')}
-                className={`flex-1 py-2 text-[9px] font-mono font-bold tracking-wider uppercase border-b-2 cursor-pointer transition-colors ${
-                  authTab === 'github'
-                    ? 'border-[#00ff00] text-[#00ff00] bg-black/40'
-                    : 'border-transparent text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                GitHub Cloud
-              </button>
-              <button
-                type="button"
-                onClick={() => setAuthTab('password')}
-                className={`flex-1 py-2 text-[9px] font-mono font-bold tracking-wider uppercase border-b-2 cursor-pointer transition-colors ${
-                  authTab === 'password'
-                    ? 'border-[#00ff00] text-[#00ff00] bg-black/40'
-                    : 'border-transparent text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                Password Access
-              </button>
-            </div>
+            {/* Unified Supabase Credentials / Login Forms */}
+            <div className="p-5 flex flex-col gap-4">
+              {isConfiguredState ? (
+                <div className="flex flex-col gap-4">
+                  {/* Status Badge: Connected */}
+                  <div className="border border-green-500/20 bg-green-950/20 px-3 py-2 rounded-lg flex justify-between items-center animate-fade-in">
+                    <div className="flex items-center gap-1.5 text-[#00ff00] font-mono text-[9px] font-extrabold uppercase tracking-wider">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] animate-pulse"></span>
+                      ✓ Connected to Supabase
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleDisconnectSupabase}
+                      className="text-[7.5px] text-zinc-500 hover:text-red-400 font-mono underline uppercase cursor-pointer"
+                    >
+                      [Disconnect]
+                    </button>
+                  </div>
 
-            {authTab === 'github' ? (
-              <div className="p-5 flex flex-col gap-4">
-                {isConfiguredState ? (
-                  <div className="flex flex-col gap-4">
-                    {/* Status Badge: Connected */}
-                    <div className="border border-green-500/20 bg-green-950/20 px-3 py-2 rounded-lg flex justify-between items-center animate-fade-in">
-                      <div className="flex items-center gap-1.5 text-[#00ff00] font-mono text-[9px] font-extrabold uppercase tracking-wider">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] animate-pulse"></span>
-                        ✓ Connected to Supabase
-                      </div>
+                  {currentUser && isUserAdmin(currentUser) ? (
+                    <div className="border border-green-500/20 bg-green-950/20 px-3 py-2.5 rounded-lg text-center flex flex-col gap-1 text-[#00ff00] font-mono text-[9.5px] font-extrabold uppercase tracking-widest animate-scale-up">
+                      <span>✓ Authenticated successfully</span>
+                      <span className="text-[7.5px] text-zinc-400 font-normal mt-0.5">Admin access is active. You can now upload and delete videos.</span>
                       <button
                         type="button"
-                        onClick={handleDisconnectSupabase}
-                        className="text-[7.5px] text-zinc-500 hover:text-red-400 font-mono underline uppercase cursor-pointer"
+                        onClick={handleAdminLogout}
+                        className="mt-3 w-full py-1 bg-red-950/20 border border-red-500/30 hover:bg-red-500 hover:text-white transition-colors text-red-500 text-[8.5px] font-mono font-bold uppercase rounded cursor-pointer"
                       >
-                        [Disconnect]
+                        Sign Out
                       </button>
                     </div>
-
-                    {currentUser && isUserAdmin(currentUser) ? (
-                      <div className="border border-green-500/20 bg-green-950/20 px-3 py-2.5 rounded-lg text-center flex flex-col gap-1 text-[#00ff00] font-mono text-[9.5px] font-extrabold uppercase tracking-widest animate-scale-up">
-                        <span>✓ Authenticated successfully</span>
-                        <span className="text-[7.5px] text-zinc-400 font-normal mt-0.5">Admin access is active. You can now upload and delete videos.</span>
+                  ) : (
+                    <form onSubmit={attemptEmailPasswordSignIn} className="flex flex-col gap-3 animate-fade-in">
+                      <div className="text-[9.5px] text-zinc-400 font-mono text-center leading-normal mb-1">
+                        Authenticate via Supabase Email & Password to unlock the administrative video upload panel.
                       </div>
-                    ) : (
+                      
                       <div className="flex flex-col gap-2">
-                        <div className="text-[9.5px] text-zinc-400 font-mono text-center mb-1">
-                          Supabase link is active. Please authenticate using GitHub to enable database sync:
-                        </div>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const success = await attemptGithubSignIn();
-                            if (success) {
-                              setIsAdminAuthOpen(false);
-                            }
-                          }}
-                          className="w-full py-2.5 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[10px] rounded flex items-center justify-center gap-2 transition-transform active:scale-98 cursor-pointer uppercase shadow-lg shadow-green-500/10"
-                        >
-                          <Github className="w-4 h-4 text-black" />
-                          SIGN IN WITH GITHUB
-                        </button>
-                      </div>
-                    )}
-
-                    {githubAuthError && (
-                      <div className="mt-1 text-red-500 font-mono text-[8px] text-center border border-red-500/10 bg-red-950/20 p-2 rounded leading-normal">
-                        ⚠️ {githubAuthError}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <form onSubmit={handleConnectSupabase} className="flex flex-col gap-3 animate-fade-in">
-                    <div className="text-[9.5px] text-zinc-400 font-mono text-center leading-normal">
-                      Enter your Supabase project API credentials below to connect the database and enable live video uploads.
-                    </div>
-
-                    <div className="flex flex-col gap-2.5">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex justify-between items-center">
+                        <div className="flex flex-col gap-1">
                           <label className="text-[7.5px] text-zinc-400 font-mono uppercase tracking-[0.2em]">
-                            Supabase URL
+                            Admin Email Address
                           </label>
-                          <a
-                            href="https://supabase.com/dashboard/org/kaililoekwqkdcixgqfm"
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[7.5px] text-[#00ff00] hover:underline font-mono"
-                          >
-                            Find credentials ↗
-                          </a>
+                          <input
+                            type="email"
+                            required
+                            placeholder="vasanthankasvk@gmail.com"
+                            value={authEmail}
+                            onChange={(e) => setAuthEmail(e.target.value)}
+                            className="bg-black border border-[#222] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono bg-zinc-950"
+                          />
                         </div>
-                        <input
-                          type="url"
-                          required
-                          placeholder="https://your-project.supabase.co"
-                          value={inputUrl}
-                          onChange={(e) => setInputUrl(e.target.value)}
-                          className="bg-black border border-[#222] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono bg-zinc-950"
-                        />
+
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[7.5px] text-[#00ff00] font-mono uppercase tracking-[0.2em]">
+                            Admin Password
+                          </label>
+                          <input
+                            type="password"
+                            required
+                            placeholder="••••••••••••"
+                            value={authPassword}
+                            onChange={(e) => {
+                              setAuthPassword(e.target.value);
+                              if (cloudAuthError) setCloudAuthError('');
+                            }}
+                            className="bg-black border border-[#222] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono bg-zinc-950"
+                          />
+                        </div>
                       </div>
 
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[7.5px] text-[#00ff00] font-mono uppercase tracking-[0.2em]">
-                          Supabase Anon Key
+                      {cloudAuthError && (
+                        <div className="mt-1 text-red-500 font-mono text-[8px] text-center border border-red-500/10 bg-red-950/20 p-2 rounded leading-normal">
+                          ⚠️ {cloudAuthError}
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        className="w-full py-2 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[9px] rounded transition-transform active:scale-98 cursor-pointer uppercase mt-1"
+                      >
+                        Log In to Console
+                      </button>
+                    </form>
+                  )}
+                </div>
+              ) : (
+                <form onSubmit={handleConnectSupabase} className="flex flex-col gap-3 animate-fade-in">
+                  <div className="text-[9.5px] text-zinc-400 font-mono text-center leading-normal">
+                    Enter your Supabase project API credentials below to connect the database and enable the email/password login form.
+                  </div>
+
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[7.5px] text-zinc-400 font-mono uppercase tracking-[0.2em]">
+                          Supabase URL
                         </label>
-                        <input
-                          type="password"
-                          required
-                          placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                          value={inputKey}
-                          onChange={(e) => setInputKey(e.target.value)}
-                          className="bg-black border border-[#222] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono bg-zinc-950"
-                        />
+                        <a
+                          href="https://supabase.com/dashboard/org/kaililoekwqkdcixgqfm"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[7.5px] text-[#00ff00] hover:underline font-mono"
+                        >
+                          Find credentials ↗
+                        </a>
                       </div>
+                      <input
+                        type="url"
+                        required
+                        placeholder="https://your-project.supabase.co"
+                        value={inputUrl}
+                        onChange={(e) => setInputUrl(e.target.value)}
+                        className="bg-black border border-[#222] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono bg-zinc-950"
+                      />
                     </div>
 
-                    {githubAuthError && (
-                      <div className="mt-1 text-red-500 font-mono text-[8px] text-center border border-red-500/10 bg-red-950/20 p-2 rounded leading-normal">
-                        ⚠️ {githubAuthError}
-                      </div>
-                    )}
-
-                    <button
-                      type="submit"
-                      className="w-full py-2 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[9px] rounded transition-transform active:scale-98 cursor-pointer uppercase mt-1"
-                    >
-                      Connect & Validate Supabase
-                    </button>
-                  </form>
-                )}
-
-                <div className="flex gap-2 pt-2 border-t border-[#1a1a1a] mt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAdminAuthOpen(false);
-                      setPasscodeInput('');
-                      setAuthError('');
-                      setGithubAuthError('');
-                    }}
-                    className="w-full py-1 bg-zinc-950 hover:bg-zinc-900 border border-[#222] text-zinc-450 font-mono text-[9px] rounded transition-colors cursor-pointer uppercase"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="p-5 flex flex-col gap-4">
-                {/* SECTION 1: Passcode (Offline) */}
-                <form onSubmit={handleAdminLogin} className="flex flex-col gap-3">
-                  <div className="text-[8px] text-zinc-500 font-mono text-center uppercase tracking-widest font-bold">
-                    — OFFLINE PASSCODE KEY —
-                  </div>
-                  
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[7.5px] text-[#00ff00] font-mono uppercase tracking-[0.2em] text-center">
-                      Security Passphrase Key
-                    </label>
-                    <input 
-                      type="password" 
-                      placeholder="••••••••••••"
-                      value={passcodeInput}
-                      onChange={(e) => {
-                        setPasscodeInput(e.target.value);
-                        if (authError) setAuthError('');
-                      }}
-                      className="bg-black border border-[#222] rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono text-center tracking-widest bg-zinc-950"
-                    />
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[7.5px] text-[#00ff00] font-mono uppercase tracking-[0.2em]">
+                        Supabase Anon Key
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                        value={inputKey}
+                        onChange={(e) => setInputKey(e.target.value)}
+                        className="bg-black border border-[#222] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono bg-zinc-950"
+                      />
+                    </div>
                   </div>
 
-                  {authError && (
-                    <div className="text-[9px] text-red-500 font-mono text-center uppercase tracking-wider animate-pulse">
-                      {authError}
+                  {githubAuthError && (
+                    <div className="mt-1 text-red-500 font-mono text-[8px] text-center border border-red-500/10 bg-red-950/20 p-2 rounded leading-normal">
+                      ⚠️ {githubAuthError}
                     </div>
                   )}
 
                   <button
                     type="submit"
-                    className="w-full py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-800 font-extrabold font-mono text-[9px] rounded transition-transform active:scale-98 cursor-pointer uppercase mt-0.5"
+                    className="w-full py-2 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[9px] rounded transition-transform active:scale-98 cursor-pointer uppercase mt-1"
                   >
-                    Validate Offline Key
+                    Connect & Validate Supabase
                   </button>
                 </form>
+              )}
 
-                <div className="flex gap-2 pt-2 border-t border-[#1a1a1a] mt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAdminAuthOpen(false);
-                      setPasscodeInput('');
-                      setAuthError('');
-                      setGithubAuthError('');
-                    }}
-                    className="w-full py-1 bg-zinc-950 hover:bg-zinc-900 border border-[#222] text-zinc-400 font-mono text-[9px] rounded transition-colors cursor-pointer uppercase"
-                  >
-                    Close
-                  </button>
-                </div>
+              <div className="flex gap-2 pt-2 border-t border-[#1a1a1a] mt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminAuthOpen(false);
+                    setPasscodeInput('');
+                    setAuthError('');
+                    setGithubAuthError('');
+                    setAuthPassword('');
+                    setCloudAuthError('');
+                  }}
+                  className="w-full py-1 bg-zinc-950 hover:bg-zinc-900 border border-[#222] text-zinc-450 font-mono text-[9px] rounded transition-colors cursor-pointer uppercase"
+                >
+                  Close
+                </button>
               </div>
-            )}
+            </div>
           </div>
         </div>
       )}
