@@ -23,9 +23,10 @@ import {
   Sparkles
 } from 'lucide-react';
 
-import { db, auth, handleFirestoreError, OperationType } from './firebase';
+import { db, auth, storage, handleFirestoreError, OperationType } from './firebase';
 import { doc, setDoc, deleteDoc, collection, onSnapshot, getDocs, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 
 // Custom interface for Work items
@@ -283,6 +284,10 @@ export default function App() {
   const [isAdminAuthOpen, setIsAdminAuthOpen] = useState(false);
   const [passcodeInput, setPasscodeInput] = useState('');
   const [authError, setAuthError] = useState('');
+  
+  // Storage upload overlays
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
 
   // 1. Firebase Auth state changed observer
   useEffect(() => {
@@ -304,10 +309,10 @@ export default function App() {
   useEffect(() => {
     const q = collection(db, 'works');
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list: any[] = [];
+      const firestoreList: any[] = [];
       snapshot.forEach((docRef) => {
         const data = docRef.data();
-        list.push({
+        firestoreList.push({
           id: docRef.id,
           title: data.title || '',
           category: data.category || '',
@@ -321,18 +326,47 @@ export default function App() {
         });
       });
 
+      const baseList = firestoreList.length === 0 ? INITIAL_WORKS : firestoreList;
+
+      // Safe retrieval of local storage custom works
+      const localWorksRaw = localStorage.getItem('vasanthan_custom_works') || '[]';
+      let localWorks: any[] = [];
+      try {
+        localWorks = JSON.parse(localWorksRaw);
+      } catch (e) {
+        localWorks = [];
+      }
+
+      // Safe retrieval of local storage deleted works ids
+      const localDeletedIdsRaw = localStorage.getItem('vasanthan_deleted_works_ids') || '[]';
+      let localDeletedIds: string[] = [];
+      try {
+        localDeletedIds = JSON.parse(localDeletedIdsRaw);
+      } catch (e) {
+        localDeletedIds = [];
+      }
+
+      // Merge baseList and localWorks, filtering out deleted ones
+      const combined = [...localWorks, ...baseList];
+      const filtered = combined.filter((item: any) => !localDeletedIds.includes(item.id));
+
+      // Remove duplicates by ID
+      const uniqueMap = new Map();
+      filtered.forEach((item) => {
+        if (!uniqueMap.has(item.id)) {
+          uniqueMap.set(item.id, item);
+        }
+      });
+      const uniqueList = Array.from(uniqueMap.values());
+
       // Sort by createdAt descending securely
-      list.sort((a, b) => {
-        const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : Date.now();
-        const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : Date.now();
+      uniqueList.sort((a, b) => {
+        const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : Date.now());
+        const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : Date.now());
         return timeB - timeA;
       });
 
-      if (list.length === 0) {
-        setWorks(INITIAL_WORKS);
-      } else {
-        setWorks(list);
-      }
+      setWorks(uniqueList);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'works');
     });
@@ -346,7 +380,12 @@ export default function App() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.image) {
-          setProfileImage(data.image);
+          const localPic = localStorage.getItem('vasanthan_profile_img');
+          const isGoogleOwner = auth.currentUser?.email === 'vasanthankasvk@gmail.com';
+          if (isGoogleOwner || !localPic) {
+            setProfileImage(data.image);
+            localStorage.setItem('vasanthan_profile_img', data.image);
+          }
         }
       }
     }, (error) => {
@@ -389,27 +428,44 @@ export default function App() {
     }
   };
 
-  const handleProfileImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Optimistic local preview setup
       const reader = new FileReader();
-      reader.onloadend = async () => {
+      reader.onloadend = () => {
         const base64String = reader.result as string;
         setProfileImage(base64String);
         localStorage.setItem('vasanthan_profile_img', base64String);
-
-        if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
-          try {
-            await setDoc(doc(db, 'profile', 'main'), {
-              image: base64String,
-              updatedAt: serverTimestamp()
-            });
-          } catch (err) {
-            handleFirestoreError(err, OperationType.WRITE, 'profile/main');
-          }
-        }
       };
       reader.readAsDataURL(file);
+
+      // Save globally via Firebase Storage if authenticated
+      if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
+        setIsUploading(true);
+        setUploadProgress('Uploading Profile Picture to Firebase Storage...');
+        try {
+          const profileStorageRef = ref(storage, `profile/avatar_${Date.now()}`);
+          const uploadSnapshot = await uploadBytes(profileStorageRef, file);
+          const downloadUrl = await getDownloadURL(uploadSnapshot.ref);
+
+          await setDoc(doc(db, 'profile', 'main'), {
+            image: downloadUrl,
+            updatedAt: serverTimestamp()
+          });
+          setProfileImage(downloadUrl);
+          localStorage.setItem('vasanthan_profile_img', downloadUrl);
+          alert('Profile picture uploaded successfully and synced globally!');
+        } catch (err) {
+          console.error(err);
+          alert('Failed to upload profile picture to cloud: ' + (err instanceof Error ? err.message : String(err)));
+        } finally {
+          setIsUploading(false);
+          setUploadProgress('');
+        }
+      } else {
+        alert('Saved locally. To publish globally for all visitors, please sign in with Google in the owner workspace!');
+      }
     }
   };
 
@@ -620,6 +676,8 @@ export default function App() {
         handleFirestoreError(err, OperationType.DELETE, 'works');
       }
     }
+    localStorage.removeItem('vasanthan_custom_works');
+    localStorage.removeItem('vasanthan_deleted_works_ids');
     setWorks(INITIAL_WORKS);
     setActiveTab('all');
     setSelectedSoftware(null);
@@ -660,10 +718,9 @@ export default function App() {
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64 = reader.result as string;
-      if (file.size > 800 * 1024) {
-        setVideoSizeWarning(`⚠️ This video is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Firestore documents are strictly limited to 1MB. Since this local file exceeds the limit, it will only work as a local cache. To sync globally for all users, we recommend pasting a direct online video URL (e.g. Dropbox, Google Drive direct MP4 links, or Mixkit MP4 lines) instead.`);
-      } else {
-        setNewVideoBase64(base64);
+      setNewVideoBase64(base64);
+      if (file.size > 50 * 1024 * 1024) {
+        setVideoSizeWarning(`⚠️ This video is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Large files may take longer to upload over slower connections.`);
       }
     };
     reader.readAsDataURL(file);
@@ -678,10 +735,9 @@ export default function App() {
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64 = reader.result as string;
-      if (file.size > 800 * 1024) {
-        setThumbnailSizeWarning(`⚠️ Thumbnail file is too large (${(file.size / 1024).toFixed(0)}KB). Please upload a smaller compressed image under 800KB.`);
-      } else {
-        setNewThumbnailBase64(base64);
+      setNewThumbnailBase64(base64);
+      if (file.size > 8 * 1024 * 1024) {
+        setThumbnailSizeWarning(`⚠️ Thumbnail file is large (${(file.size / (1024 * 1024)).toFixed(1)}MB). We recommend compressing images under 2MB for faster load performance.`);
       }
     };
     reader.readAsDataURL(file);
@@ -709,75 +765,147 @@ export default function App() {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
+    setIsUploading(true);
+    setUploadProgress('Preparing upload channels...');
+
+    const customId = `custom-work-${Date.now()}`;
     let finalVideoUrl = '';
     let finalThumbnailUrl = 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=600&auto=format&fit=crop&q=80'; 
 
-    // 1. Evaluate Video URIs
-    if (newVideoBase64) {
-      finalVideoUrl = newVideoBase64;
-    } else if (newVideoFile) {
-      finalVideoUrl = URL.createObjectURL(newVideoFile);
-    } else if (newVideoUrl.trim()) {
-      finalVideoUrl = newVideoUrl.trim();
-    } else {
-      finalVideoUrl = 'https://assets.mixkit.co/videos/preview/mixkit-recording-studio-with-microphone-and-monitors-43048-large.mp4';
-    }
-
-    // 2. Evaluate Thumbnail URIs
-    if (newThumbnailBase64) {
-      finalThumbnailUrl = newThumbnailBase64;
-    } else if (newThumbnailUrl.trim()) {
-      finalThumbnailUrl = newThumbnailUrl.trim();
-    } else if (newThumbnailFile) {
-      finalThumbnailUrl = URL.createObjectURL(newThumbnailFile);
-    }
-
-    let suggestedSoftware = ['Premiere Pro'];
-    if (newCategory === 'Social Motion Design' || newCategory === 'Advanced Visual Effects') {
-      suggestedSoftware = ['After Effects', 'Premiere Pro'];
-    } else if (newCategory === 'Professional Color Grading') {
-      suggestedSoftware = ['DaVinci Resolve'];
-    }
-
-    const customId = `custom-work-${Date.now()}`;
-    const customNewItem: any = {
-      id: customId,
-      title: newTitle.toUpperCase(),
-      category: newCategory,
-      type: newType,
-      videoUrl: finalVideoUrl,
-      thumbnailUrl: finalThumbnailUrl,
-      duration: '0:30',
-      softwareUsed: suggestedSoftware,
-      description: newDescription.trim() || `Custom media uploaded via Vasanthan Portfolio Workspace.`,
-      createdAt: serverTimestamp()
-    };
-
-    if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
-      try {
-        await setDoc(doc(db, 'works', customId), customNewItem);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.CREATE, `works/${customId}`);
+    try {
+      let suggestedSoftware = ['Premiere Pro'];
+      if (newCategory === 'Social Motion Design' || newCategory === 'Advanced Visual Effects') {
+        suggestedSoftware = ['After Effects', 'Premiere Pro'];
+      } else if (newCategory === 'Professional Color Grading') {
+        suggestedSoftware = ['DaVinci Resolve'];
       }
-    } else {
-      // Offline / unauthenticated local state preview
-      setWorks((prev) => [customNewItem, ...prev]);
+
+      if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
+        // 1. Evaluate Video URIs and upload file if present
+        if (newVideoFile) {
+          setUploadProgress(`Uploading video file "${newVideoFile.name}" to Cloud Storage...`);
+          const videoRef = ref(storage, `works/videos/${customId}_${newVideoFile.name}`);
+          const uploadSnap = await uploadBytes(videoRef, newVideoFile);
+          finalVideoUrl = await getDownloadURL(uploadSnap.ref);
+        } else if (newVideoUrl.trim()) {
+          finalVideoUrl = newVideoUrl.trim();
+        } else {
+          finalVideoUrl = 'https://assets.mixkit.co/videos/preview/mixkit-recording-studio-with-microphone-and-monitors-43048-large.mp4';
+        }
+
+        // 2. Evaluate Thumbnail URIs and upload file if present
+        if (newThumbnailFile) {
+          setUploadProgress(`Uploading cover thumbnail file "${newThumbnailFile.name}" to Cloud Storage...`);
+          const thumbRef = ref(storage, `works/thumbnails/${customId}_${newThumbnailFile.name}`);
+          const uploadSnap = await uploadBytes(thumbRef, newThumbnailFile);
+          finalThumbnailUrl = await getDownloadURL(uploadSnap.ref);
+        } else if (newThumbnailUrl.trim()) {
+          finalThumbnailUrl = newThumbnailUrl.trim();
+        }
+
+        const customNewItem: any = {
+          id: customId,
+          title: newTitle.toUpperCase(),
+          category: newCategory,
+          type: newType,
+          videoUrl: finalVideoUrl,
+          thumbnailUrl: finalThumbnailUrl,
+          duration: '0:30',
+          softwareUsed: suggestedSoftware,
+          description: newDescription.trim() || `Custom media uploaded via Vasanthan Portfolio Workspace.`,
+          createdAt: serverTimestamp()
+        };
+
+        await setDoc(doc(db, 'works', customId), customNewItem);
+        alert('Work item added and synced globally for all visitors!');
+      } else {
+        // Local offline mode support for iFrame / Passcode admin, utilizing safe local storage persistence
+        if (newVideoFile) {
+          finalVideoUrl = newVideoBase64 || URL.createObjectURL(newVideoFile);
+        } else if (newVideoUrl.trim()) {
+          finalVideoUrl = newVideoUrl.trim();
+        } else {
+          finalVideoUrl = 'https://assets.mixkit.co/videos/preview/mixkit-recording-studio-with-microphone-and-monitors-43048-large.mp4';
+        }
+
+        if (newThumbnailFile) {
+          finalThumbnailUrl = newThumbnailBase64 || URL.createObjectURL(newThumbnailFile);
+        } else if (newThumbnailUrl.trim()) {
+          finalThumbnailUrl = newThumbnailUrl.trim();
+        }
+
+        const customNewItem: any = {
+          id: customId,
+          title: newTitle.toUpperCase(),
+          category: newCategory,
+          type: newType,
+          videoUrl: finalVideoUrl,
+          thumbnailUrl: finalThumbnailUrl,
+          duration: '0:30',
+          softwareUsed: suggestedSoftware,
+          description: newDescription.trim() || `Custom media uploaded via Vasanthan Portfolio Workspace.`,
+          createdAt: { seconds: Math.floor(Date.now() / 1000) }
+        };
+
+        const localWorksRaw = localStorage.getItem('vasanthan_custom_works') || '[]';
+        let localWorks: any[] = [];
+        try {
+          localWorks = JSON.parse(localWorksRaw);
+        } catch (e) {
+          localWorks = [];
+        }
+        localWorks.unshift(customNewItem);
+
+        try {
+          localStorage.setItem('vasanthan_custom_works', JSON.stringify(localWorks));
+        } catch (storageErr) {
+          console.warn('Storage quota exceeded, removing large base64 video payload to fit quota', storageErr);
+          // Fallback: use default video, but preserve metadata and thumbnail base64
+          const compactWorks = localWorks.map((w: any) => {
+            if (w.id === customId && w.videoUrl?.startsWith('data:')) {
+              return {
+                ...w,
+                videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-recording-studio-with-microphone-and-monitors-43048-large.mp4'
+              };
+            }
+            return w;
+          });
+          try {
+            localStorage.setItem('vasanthan_custom_works', JSON.stringify(compactWorks));
+          } catch (e) {
+            console.error('Final fallback localWorks cleanup: ', e);
+          }
+        }
+
+        setWorks((prev) => [customNewItem, ...prev]);
+        alert('Work item added and saved locally! Your changes will persist on this device. For global synchronization, open the app in a new tab.');
+      }
+
+      // Clear state and input file references
+      setNewTitle('');
+      setNewCategory('Social Motion Design');
+      setNewType('normal');
+      setNewVideoUrl('');
+      setNewVideoFile(null);
+      setNewVideoBase64('');
+      setNewThumbnailUrl('');
+      setNewThumbnailFile(null);
+      setNewThumbnailBase64('');
+      setVideoSizeWarning('');
+      setThumbnailSizeWarning('');
+      setNewDescription('');
+      setIsUploadOpen(false);
+
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
+
+    } catch (err) {
+      console.error(err);
+      alert('Error uploading or creating work item: ' + (err instanceof Error ? err.message : String(err)));
+    } {
+      setIsUploading(false);
+      setUploadProgress('');
     }
-    
-    // Clear state
-    setNewTitle('');
-    setNewCategory('Social Motion Design');
-    setNewType('normal');
-    setNewVideoUrl('');
-    setNewVideoFile(null);
-    setNewVideoBase64('');
-    setNewThumbnailUrl('');
-    setNewThumbnailFile(null);
-    setNewThumbnailBase64('');
-    setVideoSizeWarning('');
-    setThumbnailSizeWarning('');
-    setNewDescription('');
-    setIsUploadOpen(false);
   };
 
   const handleDeleteWorkItem = async (id: string, e: React.MouseEvent) => {
@@ -789,6 +917,31 @@ export default function App() {
         handleFirestoreError(err, OperationType.DELETE, `works/${id}`);
       }
     } else {
+      // Offline / unauthenticated local state preview deletion
+      const localDeletedIdsRaw = localStorage.getItem('vasanthan_deleted_works_ids') || '[]';
+      let localDeletedIds: string[] = [];
+      try {
+        localDeletedIds = JSON.parse(localDeletedIdsRaw);
+      } catch (e) {
+        localDeletedIds = [];
+      }
+      if (!localDeletedIds.includes(id)) {
+        localDeletedIds.push(id);
+        localStorage.setItem('vasanthan_deleted_works_ids', JSON.stringify(localDeletedIds));
+      }
+
+      // Also remove from local custom works if it was there to save storage
+      const localWorksRaw = localStorage.getItem('vasanthan_custom_works') || '[]';
+      let localWorks: any[] = [];
+      try {
+        localWorks = JSON.parse(localWorksRaw);
+      } catch (e) {
+        localWorks = [];
+      }
+      const filteredLocalWorks = localWorks.filter((w: any) => w.id !== id);
+      localStorage.setItem('vasanthan_custom_works', JSON.stringify(filteredLocalWorks));
+
+      // Update state
       setWorks((prev) => prev.filter(w => w.id !== id));
     }
     if (activeLightboxProject?.id === id) {
@@ -866,6 +1019,31 @@ export default function App() {
 
   return (
     <div id="portfolio-app-root" className="relative min-h-screen bg-black text-white font-sans antialiased selection:bg-[#00ff00] selection:text-black flex flex-col justify-between overflow-x-hidden">
+      
+      {/* GLOBAL CLOUD UPLOAD PROGRESS MODAL */}
+      {isUploading && (
+        <div className="fixed inset-0 z-[9999] bg-black/95 flex flex-col items-center justify-center p-6 backdrop-blur-md">
+          <div className="w-full max-w-sm bg-[#090909] border border-[#222] p-6 rounded text-center flex flex-col items-center gap-4 shadow-2xl">
+            <div className="relative w-12 h-12 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border border-[#00ff00] animate-ping opacity-60" />
+              <div className="absolute inset-2 rounded-full border-2 border-dashed border-[#00ff00] animate-spin" />
+              <div className="text-lg">⚡</div>
+            </div>
+            
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-mono text-[#00ff00] uppercase tracking-widest font-black">
+                UPLOADING TO CLOUD STORAGE
+              </span>
+              <p className="text-xs text-zinc-300 font-medium font-mono">
+                {uploadProgress || 'Uploading assets to Vasanthan Portfolio...'}
+              </p>
+              <span className="text-[9px] text-zinc-500 font-mono">
+                Please wait. This will sync globally for all users instantly!
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* GLOBAL GRAPHIC BACKGROUND WORK - GRID, LASER ACCENTS, MATRIX CORNERS, LIGHT NODE BLURS */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
@@ -1152,16 +1330,23 @@ export default function App() {
                       </span>
                     </div>
                   ) : (
-                    <div className="bg-amber-950/20 border border-amber-900/30 p-1.5 rounded flex flex-col gap-0.5">
+                    <div className="bg-amber-950/20 border border-amber-900/30 p-1.5 rounded flex flex-col gap-1">
                       <div className="flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                        <span className="text-[7.5px] text-amber-500 font-mono uppercase font-extrabold leading-none">
-                          LOCAL PREVIEW ONLY
+                        <span className="text-[7.5px] text-amber-500 font-mono uppercase font-extrabold leading-none flex items-center gap-0.5">
+                          LOCAL PREVIEW (IFRAME BLOCK)
                         </span>
                       </div>
-                      <p className="text-[7px] text-zinc-500 leading-snug">
-                        Sign in using Google (OWNER account) to push changes globally to everyone.
+                      <p className="text-[7.2px] text-zinc-400 leading-snug">
+                        Google Sign-In popups are blocked inside the preview iframe. Click below to open in a new tab, login, and upload globally:
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => window.open(window.location.origin, '_blank')}
+                        className="w-full py-1 text-center bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-black font-mono border border-amber-500/20 rounded text-[7px] font-extrabold cursor-pointer transition-all"
+                      >
+                        OPEN PORTFOLIO IN NEW TAB ↗
+                      </button>
                     </div>
                   )}
 
@@ -2462,6 +2647,16 @@ export default function App() {
                   </svg>
                   SIGN IN WITH GOOGLE (OWNER)
                 </button>
+                <div className="text-amber-500 font-mono text-[7.5px] text-center border border-amber-500/10 bg-amber-950/20 p-1.5 rounded leading-normal">
+                  ⚠️ Google Auth popups are blocked by browsers inside the AI Studio iframe. To establish genuine cloud connection, please click:
+                  <button
+                    type="button"
+                    onClick={() => window.open(window.location.origin, '_blank')}
+                    className="mt-1 w-full py-1 text-center bg-amber-500 text-black font-extrabold uppercase rounded text-[7.5px] cursor-pointer"
+                  >
+                    Open Standalone Site ↗
+                  </button>
+                </div>
               </div>
 
               <div className="text-[9px] text-zinc-650 font-mono text-center mt-1 leading-normal">
