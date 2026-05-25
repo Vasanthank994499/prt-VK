@@ -25,7 +25,7 @@ import {
 
 import { db, auth, storage, handleFirestoreError, OperationType } from './firebase';
 import { doc, setDoc, deleteDoc, collection, onSnapshot, getDocs, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { onAuthStateChanged, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 
@@ -397,6 +397,41 @@ export default function App() {
     }
   };
 
+  // Robust Google Sign-In: tries popup first, falls back to redirect if popup is blocked
+  const attemptGoogleSignIn = async (): Promise<boolean> => {
+    const provider = new GoogleAuthProvider();
+    try {
+      // Try popup first (works in most browsers)
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      if (user.email === 'vasanthankasvk@gmail.com' && user.emailVerified) {
+        setIsAdmin(true);
+        localStorage.setItem('is_admin_v2', 'true');
+        return true;
+      } else {
+        alert(`ACCESS DENIED: Only vasanthankasvk@gmail.com has write access. You signed in as ${user.email || 'unknown'}.`);
+        await signOut(auth);
+        return false;
+      }
+    } catch (popupErr: any) {
+      // If popup is blocked or fails, fall back to redirect
+      if (
+        popupErr?.code === 'auth/popup-blocked' ||
+        popupErr?.code === 'auth/popup-closed-by-user' ||
+        popupErr?.code === 'auth/cancelled-popup-request' ||
+        popupErr?.code === 'auth/unauthorized-domain'
+      ) {
+        // Use redirect as fallback — page will reload after sign-in
+        signInWithRedirect(auth, provider);
+        return false;
+      }
+      // For other errors, show the actual error message
+      console.error('Google Sign-In error:', popupErr);
+      alert('Google Sign-In failed: ' + (popupErr?.message || String(popupErr)));
+      return false;
+    }
+  };
+
   // Profile image upload has been permanently disabled — image is fixed
 
   // Studio Monitor Lightbox state
@@ -598,9 +633,8 @@ export default function App() {
   // Reset to initial list
   const handleResetWorks = async () => {
     if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
-      const provider = new GoogleAuthProvider();
-      signInWithRedirect(auth, provider);
-      return;
+      const success = await attemptGoogleSignIn();
+      if (!success) return;
     }
     if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
       try {
@@ -708,10 +742,9 @@ export default function App() {
     try {
       // Ensure Google Sign-In before uploading globally
       if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
-        setUploadProgress('Redirecting to Google Sign-In...');
-        const provider = new GoogleAuthProvider();
-        signInWithRedirect(auth, provider);
-        return;
+        setUploadProgress('Signing in with Google for global upload...');
+        const success = await attemptGoogleSignIn();
+        if (!success) return;
       }
 
       let suggestedSoftware = ['Premiere Pro'];
@@ -792,9 +825,8 @@ export default function App() {
     e.stopPropagation();
     // Ensure Google Sign-In before deleting globally
     if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
-      const provider = new GoogleAuthProvider();
-      signInWithRedirect(auth, provider);
-      return;
+      const success = await attemptGoogleSignIn();
+      if (!success) return;
     }
     try {
       await deleteDoc(doc(db, 'works', id));
@@ -2121,10 +2153,7 @@ export default function App() {
                     </p>
                     <button
                       type="button"
-                      onClick={() => {
-                        const provider = new GoogleAuthProvider();
-                        signInWithRedirect(auth, provider);
-                      }}
+                      onClick={() => attemptGoogleSignIn()}
                       className="py-1 bg-white hover:bg-zinc-200 text-black font-extrabold text-[8.5px] font-mono rounded transition-colors uppercase leading-none"
                     >
                       Authenticate Google Admin Channel
@@ -2394,10 +2423,7 @@ export default function App() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    const provider = new GoogleAuthProvider();
-                    signInWithRedirect(auth, provider);
-                  }}
+                  onClick={() => attemptGoogleSignIn()}
                   className="w-full py-2 bg-white hover:bg-zinc-200 text-black font-extrabold font-mono text-[9px] rounded flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
                   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
