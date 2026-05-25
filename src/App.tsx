@@ -263,6 +263,12 @@ export default function App() {
   const [newType, setNewType] = useState<'vertical' | 'landscape' | 'normal'>('normal');
   const [newVideoUrl, setNewVideoUrl] = useState('');
   const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
+  const [newVideoBase64, setNewVideoBase64] = useState<string>('');
+  const [videoSizeWarning, setVideoSizeWarning] = useState<string>('');
+  const [newThumbnailFile, setNewThumbnailFile] = useState<File | null>(null);
+  const [newThumbnailUrl, setNewThumbnailUrl] = useState<string>('');
+  const [newThumbnailBase64, setNewThumbnailBase64] = useState<string>('');
+  const [thumbnailSizeWarning, setThumbnailSizeWarning] = useState<string>('');
   const [newDescription, setNewDescription] = useState('');
   
   // Persistent avatar upload in localStorage
@@ -422,6 +428,7 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
   const lightboxVideoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -632,6 +639,54 @@ export default function App() {
     }
   };
 
+  // Process Video Input File
+  const processVideoFile = (file: File) => {
+    setNewVideoFile(file);
+    setNewTitle(file.name.substring(0, file.name.lastIndexOf('.')) || file.name);
+    setVideoSizeWarning('');
+    setNewVideoBase64('');
+
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.includes('reel') || lowerName.includes('short') || lowerName.includes('tiktok') || lowerName.includes('story')) {
+      setNewType('vertical');
+      setNewCategory('Social Motion Design');
+    } else if (lowerName.includes('cinematic') || lowerName.includes('wide') || lowerName.includes('landscape') || lowerName.includes('showreel')) {
+      setNewType('landscape');
+      setNewCategory('Commercial Production');
+    } else {
+      setNewType('normal');
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      if (file.size > 800 * 1024) {
+        setVideoSizeWarning(`⚠️ This video is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Firestore documents are strictly limited to 1MB. Since this local file exceeds the limit, it will only work as a local cache. To sync globally for all users, we recommend pasting a direct online video URL (e.g. Dropbox, Google Drive direct MP4 links, or Mixkit MP4 lines) instead.`);
+      } else {
+        setNewVideoBase64(base64);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Process Thumbnail Input Image
+  const processThumbnailFile = (file: File) => {
+    setNewThumbnailFile(file);
+    setThumbnailSizeWarning('');
+    setNewThumbnailBase64('');
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      if (file.size > 800 * 1024) {
+        setThumbnailSizeWarning(`⚠️ Thumbnail file is too large (${(file.size / 1024).toFixed(0)}KB). Please upload a smaller compressed image under 800KB.`);
+      } else {
+        setNewThumbnailBase64(base64);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Handle Drop and read file URLs
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -639,45 +694,42 @@ export default function App() {
     setDragActive(false);
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      setNewVideoFile(file);
-      setNewTitle(file.name.substring(0, file.name.lastIndexOf('.')) || file.name);
-      
-      const lowerName = file.name.toLowerCase();
-      if (lowerName.includes('reel') || lowerName.includes('short') || lowerName.includes('tiktok') || lowerName.includes('story')) {
-        setNewType('vertical');
-        setNewCategory('Social Motion Design');
-      } else if (lowerName.includes('cinematic') || lowerName.includes('wide') || lowerName.includes('landscape') || lowerName.includes('showreel')) {
-        setNewType('landscape');
-        setNewCategory('Commercial Production');
-      } else {
-        setNewType('normal');
-      }
+      processVideoFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setNewVideoFile(file);
-      setNewTitle(file.name.substring(0, file.name.lastIndexOf('.')) || file.name);
+      processVideoFile(e.target.files[0]);
     }
   };
 
-  // Create & Insert New Work Item
+  // Create & Insert New Work Item with real-time sync
   const handleCreateWorkItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
     let finalVideoUrl = '';
-    const finalThumbnailUrl = 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=600&auto=format&fit=crop&q=80'; 
+    let finalThumbnailUrl = 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=600&auto=format&fit=crop&q=80'; 
 
-    if (newVideoFile) {
+    // 1. Evaluate Video URIs
+    if (newVideoBase64) {
+      finalVideoUrl = newVideoBase64;
+    } else if (newVideoFile) {
       finalVideoUrl = URL.createObjectURL(newVideoFile);
     } else if (newVideoUrl.trim()) {
       finalVideoUrl = newVideoUrl.trim();
     } else {
       finalVideoUrl = 'https://assets.mixkit.co/videos/preview/mixkit-recording-studio-with-microphone-and-monitors-43048-large.mp4';
+    }
+
+    // 2. Evaluate Thumbnail URIs
+    if (newThumbnailBase64) {
+      finalThumbnailUrl = newThumbnailBase64;
+    } else if (newThumbnailUrl.trim()) {
+      finalThumbnailUrl = newThumbnailUrl.trim();
+    } else if (newThumbnailFile) {
+      finalThumbnailUrl = URL.createObjectURL(newThumbnailFile);
     }
 
     let suggestedSoftware = ['Premiere Pro'];
@@ -712,11 +764,18 @@ export default function App() {
       setWorks((prev) => [customNewItem, ...prev]);
     }
     
+    // Clear state
     setNewTitle('');
     setNewCategory('Social Motion Design');
     setNewType('normal');
     setNewVideoUrl('');
     setNewVideoFile(null);
+    setNewVideoBase64('');
+    setNewThumbnailUrl('');
+    setNewThumbnailFile(null);
+    setNewThumbnailBase64('');
+    setVideoSizeWarning('');
+    setThumbnailSizeWarning('');
     setNewDescription('');
     setIsUploadOpen(false);
   };
@@ -1080,13 +1139,36 @@ export default function App() {
 
             {isAdmin && (
               <div className="text-center animate-fade-in">
-                <div className="flex flex-col gap-1 px-2.5 py-1.5 bg-[#050505] border border-[#141414] rounded">
-                  <span className="text-[8px] text-[#00ff00] font-mono uppercase font-bold tracking-wider">
-                    🛰️ BUILD COPIER ACTIVE
+                <div className="flex flex-col gap-1.5 px-2.5 py-1.5 bg-[#050505] border border-[#141414] rounded text-left">
+                  <span className="text-[8px] text-[#00ff00] font-mono uppercase font-black tracking-wider text-center block">
+                    🛰️ PORTFOLIO WORKSPACE ACTIVE
                   </span>
-                  <p className="text-[7.5px] text-zinc-500 leading-tight">
+                  
+                  {auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com' ? (
+                    <div className="bg-[#00ff00]/5 border border-[#00ff00]/20 p-1.5 rounded flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] animate-pulse shrink-0" />
+                      <span className="text-[7.5px] text-[#00ff00] font-mono uppercase font-extrabold leading-none">
+                        CLOUD SYNC CONNECTED (GLOBAL)
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-950/20 border border-amber-900/30 p-1.5 rounded flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                        <span className="text-[7.5px] text-amber-500 font-mono uppercase font-extrabold leading-none">
+                          LOCAL PREVIEW ONLY
+                        </span>
+                      </div>
+                      <p className="text-[7px] text-zinc-500 leading-snug">
+                        Sign in using Google (OWNER account) to push changes globally to everyone.
+                      </p>
+                    </div>
+                  )}
+
+                  <p className="text-[7.5px] text-zinc-500 leading-tight border-t border-[#111] pt-1.5 mt-1">
                     Upload your picture, copy the system code, and paste/send it to make it permanent for all visitors!
                   </p>
+                  
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(profileImage);
@@ -1107,7 +1189,7 @@ export default function App() {
                             updatedAt: serverTimestamp()
                           });
                         } catch (err) {
-                          handleFirestoreError(err, OperationType.WRITE, 'profile/main');
+                           handleFirestoreError(err, OperationType.WRITE, 'profile/main');
                         }
                       }
                       alert("Local profile image override cleared. Restored to system default!");
@@ -2030,70 +2112,188 @@ export default function App() {
 
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
-                  Video File Upload or Drop
-                </label>
-                
-                <div 
-                  onDragEnter={handleDrag}
-                  onDragOver={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-lg p-5 text-center flex flex-col items-center justify-center cursor-pointer transition-colors ${
-                    dragActive 
-                      ? 'border-[#00ff00] bg-emerald-950/20' 
-                      : newVideoFile 
-                        ? 'border-emerald-700 bg-zinc-900/40' 
-                        : 'border-[#1a1a1a] bg-black hover:border-zinc-700'
-                  }`}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="video/*,image/*"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  
-                  {newVideoFile ? (
-                    <div className="animate-fade-in">
-                      <div className="w-6 h-6 rounded-full bg-[#00ff00]/20 text-[#00ff00] flex items-center justify-center mx-auto mb-1.5 text-xs font-bold">✓</div>
-                      <div className="text-xs font-mono font-bold text-white max-w-[280px] truncate mx-auto">
-                        FILE REGISTERED: {newVideoFile.name}
-                      </div>
-                      <div className="text-[9px] text-zinc-500 font-mono mt-0.5">
-                        ({(newVideoFile.size / (1024 * 1024)).toFixed(2)} MB • Tap to replace file)
-                      </div>
-                    </div>
+              {/* Real-time Connection State Indicator in Header */}
+              <div className="px-3 py-2 bg-zinc-950 border border-zinc-900 rounded flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] font-mono uppercase font-black text-zinc-500">DATABASE SYNC TARGET:</span>
+                  {auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com' ? (
+                    <span className="text-[8.5px] font-mono bg-emerald-950/60 border border-emerald-800 text-[#00ff00] px-1.5 py-0.5 rounded font-extrabold flex items-center gap-1">
+                      <span className="w-1 h-1 rounded-full bg-[#00ff00] animate-ping" /> CLOUD FIRESTORE ACTIVED (GLOBAL)
+                    </span>
                   ) : (
-                    <div>
-                      <div className="text-zinc-500 mx-auto mb-1.5 text-lg">📁</div>
-                      <div className="text-xs text-zinc-400">
-                        Drag &amp; drop video here, or <span className="text-[#00ff00] underline font-medium">browse local files</span>
+                    <span className="text-[8.5px] font-mono bg-amber-950/60 border border-amber-900 text-amber-500 px-1.5 py-0.5 rounded font-extrabold flex items-center gap-1">
+                      <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse" /> LOCAL CACHE ONLY (PASSCODE PREVIEW)
+                    </span>
+                  )}
+                </div>
+                {(!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') && (
+                  <div className="flex flex-col gap-1.5 pt-1 border-t border-zinc-900 mt-1">
+                    <p className="text-[8px] text-zinc-400 leading-snug">
+                      Notice: Your changes will only reside on your computer. To save to the live cloud database so that **everyone globally** sees your uploaded item, you must log in with your Google account.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const provider = new GoogleAuthProvider();
+                          const result = await signInWithPopup(auth, provider);
+                          const user = result.user;
+                          if (user.email === 'vasanthankasvk@gmail.com' && user.emailVerified) {
+                            setIsAdmin(true);
+                            localStorage.setItem('is_admin_v2', 'true');
+                            alert(`SUCCESS: Authenticated as ${user.email}. Live Firestore cloud integration is active!`);
+                          } else {
+                            alert(`DENIED: Only vasanthankasvk@gmail.com has global database write access.`);
+                            await signOut(auth);
+                          }
+                        } catch (err) {
+                          alert(err instanceof Error ? err.message : String(err));
+                        }
+                      }}
+                      className="py-1 bg-white hover:bg-zinc-200 text-black font-extrabold text-[8.5px] font-mono rounded transition-colors uppercase leading-none"
+                    >
+                      Authenticate Google Admin Channel
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* VIDEO RESOURCE CONFIGURATION */}
+              <div className="border border-[#1a1a1a] bg-[#050505] p-3 rounded flex flex-col gap-3">
+                <span className="text-[9px] font-mono font-bold text-[#00ff00] uppercase tracking-wider">
+                  🎥 VIDEO CHANNEL SOURCE
+                </span>
+                
+                <div className="flex flex-col gap-1.5">
+                  <div 
+                    onDragEnter={handleDrag}
+                    onDragOver={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded p-4 text-center flex flex-col items-center justify-center cursor-pointer transition-colors ${
+                      dragActive 
+                        ? 'border-[#00ff00] bg-emerald-950/20' 
+                        : newVideoFile 
+                          ? 'border-emerald-700 bg-zinc-900/40' 
+                          : 'border-[#1a1a1a] bg-black hover:border-zinc-700'
+                    }`}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="video/*"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                    
+                    {newVideoFile ? (
+                      <div className="animate-fade-in">
+                        <div className="w-5 h-5 rounded-full bg-[#00ff00]/20 text-[#00ff00] flex items-center justify-center mx-auto mb-1 text-[9px] font-bold">✓</div>
+                        <div className="text-[10px] font-mono font-bold text-white max-w-[240px] truncate mx-auto">
+                          VIDEO file: {newVideoFile.name}
+                        </div>
+                        <div className="text-[8px] text-zinc-500 font-mono mt-0.5">
+                          ({(newVideoFile.size / (1024 * 1024)).toFixed(2)} MB • Tap to replace)
+                        </div>
                       </div>
-                      <p className="text-[9px] text-zinc-600 font-mono mt-1">
-                        Plays instantly in browser using direct local HTML blob projection.
-                      </p>
+                    ) : (
+                      <div>
+                        <div className="text-zinc-500 text-sm mb-1">📁</div>
+                        <div className="text-[10px] text-zinc-400">
+                          Drop Video here, or <span className="text-[#00ff00] underline font-medium">browse local files</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {videoSizeWarning && (
+                    <div className="text-[8px] text-amber-500 font-mono leading-normal mt-1 border border-amber-900/20 bg-amber-950/10 p-1.5 rounded">
+                      {videoSizeWarning}
                     </div>
                   )}
                 </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex justify-between items-center text-[9px] font-mono text-zinc-400">
+                    <span className="uppercase tracking-widest">Or Paste Direct Video URL (Any HTTPS MP4 URL)</span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="https://assets.mixkit.co/videos/preview/..."
+                    value={newVideoUrl}
+                    onChange={(e) => setNewVideoUrl(e.target.value)}
+                    disabled={!!newVideoFile}
+                    className="bg-black border border-[#1a1a1a] rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono placeholder:text-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                  />
+                </div>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <div className="flex justify-between items-center text-[10px] font-mono text-zinc-400">
-                  <span className="uppercase tracking-widest">Or Paste Direct Video URL</span>
-                  <span className="text-zinc-600">HTTPS / MP4 LOOP</span>
+              {/* THUMBNAIL RESOURCE CONFIGURATION */}
+              <div className="border border-[#1a1a1a] bg-[#050505] p-3 rounded flex flex-col gap-3">
+                <span className="text-[9px] font-mono font-bold text-[#00ff00] uppercase tracking-wider">
+                  🖼️ THUMBNAIL STATUS & COVER SOURCE
+                </span>
+
+                <div className="flex flex-col gap-1.5">
+                  <div 
+                    onClick={() => thumbnailInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded p-4 text-center flex flex-col items-center justify-center cursor-pointer transition-colors ${
+                      newThumbnailFile 
+                        ? 'border-emerald-700 bg-zinc-900/40' 
+                        : 'border-[#1a1a1a] bg-black hover:border-zinc-700'
+                    }`}
+                  >
+                    <input
+                      ref={thumbnailInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) {
+                          processThumbnailFile(e.target.files[0]);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    
+                    {newThumbnailFile ? (
+                      <div className="animate-fade-in">
+                        <div className="w-5 h-5 rounded-full bg-[#00ff00]/20 text-[#00ff00] flex items-center justify-center mx-auto mb-1 text-[9px] font-bold">✓</div>
+                        <div className="text-[10px] font-mono font-bold text-white max-w-[240px] truncate mx-auto">
+                          THUMBNAIL file: {newThumbnailFile.name}
+                        </div>
+                        <div className="text-[8px] text-zinc-500 font-mono mt-0.5">
+                          ({(newThumbnailFile.size / 1024).toFixed(0)} KB • Tap to replace)
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="text-zinc-500 text-sm mb-1">🖼️</div>
+                        <div className="text-[10px] text-zinc-400">
+                          Upload Covers / Custom Thumbnail, or <span className="text-[#00ff00] underline font-medium">browse local images</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {thumbnailSizeWarning && (
+                    <div className="text-[8px] text-amber-500 font-mono leading-normal mt-1 border border-amber-900/20 bg-amber-950/10 p-1.5 rounded">
+                      {thumbnailSizeWarning}
+                    </div>
+                  )}
                 </div>
-                <input
-                  type="text"
-                  placeholder="https://assets.mixkit.co/videos/preview/...mp4"
-                  value={newVideoUrl}
-                  onChange={(e) => setNewVideoUrl(e.target.value)}
-                  disabled={!!newVideoFile}
-                  className="bg-black border border-[#1a1a1a] rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono placeholder:text-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
-                />
+
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex justify-between items-center text-[9px] font-mono text-zinc-400">
+                    <span className="uppercase tracking-widest">Or Paste Direct Thumbnail Image URL</span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="https://images.unsplash.com/photo-1492691527719-..."
+                    value={newThumbnailUrl}
+                    onChange={(e) => setNewThumbnailUrl(e.target.value)}
+                    disabled={!!newThumbnailFile}
+                    className="bg-black border border-[#1a1a1a] rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono placeholder:text-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                  />
+                </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
