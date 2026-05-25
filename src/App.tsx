@@ -25,7 +25,7 @@ import {
 
 import { db, auth, storage, handleFirestoreError, OperationType } from './firebase';
 import { doc, setDoc, deleteDoc, collection, onSnapshot, getDocs, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 
@@ -303,6 +303,26 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Handle Google Sign-In redirect result on page load
+  useEffect(() => {
+    getRedirectResult(auth).then((result) => {
+      if (result && result.user) {
+        const user = result.user;
+        if (user.email === 'vasanthankasvk@gmail.com' && user.emailVerified) {
+          setIsAdmin(true);
+          localStorage.setItem('is_admin_v2', 'true');
+        } else {
+          alert(`ACCESS DENIED: Only vasanthankasvk@gmail.com has write access.`);
+          signOut(auth);
+          setIsAdmin(false);
+          localStorage.removeItem('is_admin_v2');
+        }
+      }
+    }).catch((err) => {
+      console.error('Redirect sign-in error:', err);
+    });
+  }, []);
+
   // 2. Real-time Works synchronization listener hook
   useEffect(() => {
     const q = collection(db, 'works');
@@ -578,12 +598,9 @@ export default function App() {
   // Reset to initial list
   const handleResetWorks = async () => {
     if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
-      try {
-        await signInWithPopup(auth, new GoogleAuthProvider());
-      } catch (err) {
-        alert('Google Sign-In is required to reset works globally. Please try again.');
-        return;
-      }
+      const provider = new GoogleAuthProvider();
+      signInWithRedirect(auth, provider);
+      return;
     }
     if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
       try {
@@ -691,21 +708,10 @@ export default function App() {
     try {
       // Ensure Google Sign-In before uploading globally
       if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
-        setUploadProgress('Signing in with Google for global upload...');
-        try {
-          await signInWithPopup(auth, new GoogleAuthProvider());
-        } catch (signInErr) {
-          alert('Google Sign-In is required to upload globally for all visitors. Please sign in and try again.');
-          return;
-        }
-        // Verify the signed-in account is the admin
-        if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
-          alert('You must sign in with the owner account (vasanthankasvk@gmail.com) to upload globally.');
-          await signOut(auth);
-          return;
-        }
-        setIsAdmin(true);
-        localStorage.setItem('is_admin_v2', 'true');
+        setUploadProgress('Redirecting to Google Sign-In...');
+        const provider = new GoogleAuthProvider();
+        signInWithRedirect(auth, provider);
+        return;
       }
 
       let suggestedSoftware = ['Premiere Pro'];
@@ -786,19 +792,9 @@ export default function App() {
     e.stopPropagation();
     // Ensure Google Sign-In before deleting globally
     if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
-      try {
-        await signInWithPopup(auth, new GoogleAuthProvider());
-      } catch (err) {
-        alert('Google Sign-In is required to delete works globally. Please try again.');
-        return;
-      }
-      if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
-        alert('You must sign in with the owner account (vasanthankasvk@gmail.com) to delete works.');
-        await signOut(auth);
-        return;
-      }
-      setIsAdmin(true);
-      localStorage.setItem('is_admin_v2', 'true');
+      const provider = new GoogleAuthProvider();
+      signInWithRedirect(auth, provider);
+      return;
     }
     try {
       await deleteDoc(doc(db, 'works', id));
@@ -2125,22 +2121,9 @@ export default function App() {
                     </p>
                     <button
                       type="button"
-                      onClick={async () => {
-                        try {
-                          const provider = new GoogleAuthProvider();
-                          const result = await signInWithPopup(auth, provider);
-                          const user = result.user;
-                          if (user.email === 'vasanthankasvk@gmail.com' && user.emailVerified) {
-                            setIsAdmin(true);
-                            localStorage.setItem('is_admin_v2', 'true');
-                            alert(`SUCCESS: Authenticated as ${user.email}. Live Firestore cloud integration is active!`);
-                          } else {
-                            alert(`DENIED: Only vasanthankasvk@gmail.com has global database write access.`);
-                            await signOut(auth);
-                          }
-                        } catch (err) {
-                          alert(err instanceof Error ? err.message : String(err));
-                        }
+                      onClick={() => {
+                        const provider = new GoogleAuthProvider();
+                        signInWithRedirect(auth, provider);
                       }}
                       className="py-1 bg-white hover:bg-zinc-200 text-black font-extrabold text-[8.5px] font-mono rounded transition-colors uppercase leading-none"
                     >
@@ -2411,26 +2394,9 @@ export default function App() {
                 </div>
                 <button
                   type="button"
-                  onClick={async () => {
-                    try {
-                      const provider = new GoogleAuthProvider();
-                      const result = await signInWithPopup(auth, provider);
-                      const user = result.user;
-                      if (user.email === 'vasanthankasvk@gmail.com' && user.emailVerified) {
-                        setIsAdmin(true);
-                        localStorage.setItem('is_admin_v2', 'true');
-                        setIsAdminAuthOpen(false);
-                        alert(`ACCESS GRANTED: Authenticated as ${user.email}. Live Firestore write integration is fully activated!`);
-                      } else {
-                        alert(`ACCESS DENIED: Authenticated as ${user.email || 'anonymous'}. Only the portfolio administrator (vasanthankasvk@gmail.com) is allowed write permissions.`);
-                        await signOut(auth);
-                        setIsAdmin(false);
-                        localStorage.removeItem('is_admin_v2');
-                      }
-                    } catch (err) {
-                      console.error("Sign-in error", err);
-                      setAuthError(err instanceof Error ? err.message : "Sign-in exception");
-                    }
+                  onClick={() => {
+                    const provider = new GoogleAuthProvider();
+                    signInWithRedirect(auth, provider);
                   }}
                   className="w-full py-2 bg-white hover:bg-zinc-200 text-black font-extrabold font-mono text-[9px] rounded flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
