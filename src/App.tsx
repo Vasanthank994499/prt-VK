@@ -248,16 +248,6 @@ const renderCategoryIcon = (iconName: string) => {
 // Fixed profile image — permanently set, not changeable
 const PROFILE_IMAGE_PATH = '/profile.png';
 
-const isUserAdmin = (user: any): boolean => {
-  if (!user) return false;
-  const email = user.email;
-  const githubUsername = user.user_metadata?.user_name || user.user_metadata?.preferred_username;
-  return (
-    email === 'vasanthankasvk@gmail.com' || 
-    githubUsername?.toLowerCase() === 'vasanthank994499'
-  );
-};
-
 export default function App() {
   const [works, setWorks] = useState<WorkItem[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'landscape' | 'vertical' | 'normal'>('all');
@@ -290,15 +280,10 @@ export default function App() {
   const [isAdminAuthOpen, setIsAdminAuthOpen] = useState(false);
   const [passcodeInput, setPasscodeInput] = useState('');
   const [authError, setAuthError] = useState('');
-  const [authTab, setAuthTab] = useState<'github' | 'password'>('github');
   const [githubAuthError, setGithubAuthError] = useState<string>('');
   const [inputUrl, setInputUrl] = useState(() => localStorage.getItem('VITE_SUPABASE_URL') || '');
   const [inputKey, setInputKey] = useState(() => localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
   const [isConfiguredState, setIsConfiguredState] = useState(() => hasSupabaseConfig());
-  const [authEmail, setAuthEmail] = useState('vasanthankasvk@gmail.com');
-  const [authPassword, setAuthPassword] = useState('');
-  const [cloudAuthError, setCloudAuthError] = useState('');
-  const [currentUser, setCurrentUser] = useState<any>(null);
 
   const handleConnectSupabase = (e: React.FormEvent) => {
     e.preventDefault();
@@ -320,40 +305,11 @@ export default function App() {
     setGithubAuthError('');
     setIsAdmin(false);
     localStorage.removeItem('is_admin_v2');
-    supabase.auth.signOut();
   };
   
   // Storage upload overlays
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
-
-  // 1. Supabase Auth state change observer
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const user = session?.user;
-      setCurrentUser(user || null);
-      if (isUserAdmin(user)) {
-        setIsAdmin(true);
-        localStorage.setItem('is_admin_v2', 'true');
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      const user = session?.user;
-      setCurrentUser(user || null);
-      if (isUserAdmin(user)) {
-        setIsAdmin(true);
-        localStorage.setItem('is_admin_v2', 'true');
-      } else {
-        if (event === 'SIGNED_OUT' || (user && !isUserAdmin(user))) {
-          setIsAdmin(false);
-          localStorage.removeItem('is_admin_v2');
-        }
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   // 2. Real-time Works synchronization listener hook
   const fetchWorks = async () => {
@@ -432,70 +388,9 @@ export default function App() {
     }
   };
 
-  const handleAdminLogout = async () => {
+  const handleAdminLogout = () => {
     setIsAdmin(false);
     localStorage.removeItem('is_admin_v2');
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // Robust GitHub Sign-In with Supabase redirect
-  const attemptGithubSignIn = async (): Promise<boolean> => {
-    setGithubAuthError('');
-    if (!hasSupabaseConfig()) {
-      setGithubAuthError('Supabase credentials are not configured. Redirecting to Supabase Dashboard...');
-      window.open('https://supabase.com/dashboard/org/kaililoekwqkdcixgqfm', '_blank');
-      return false;
-    }
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'github',
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
-      if (error) throw error;
-      return true;
-    } catch (err: any) {
-      console.error('Supabase GitHub Sign-In error:', err);
-      setGithubAuthError(err.message || String(err));
-      return false;
-    }
-  };
-
-  // Supabase Email/Password Sign-In helper
-  const attemptEmailPasswordSignIn = async (e: React.FormEvent): Promise<boolean> => {
-    e.preventDefault();
-    setCloudAuthError('');
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: authEmail.trim(),
-        password: authPassword,
-      });
-      if (error) throw error;
-
-      const user = data.user;
-      if (isUserAdmin(user)) {
-        setIsAdmin(true);
-        localStorage.setItem('is_admin_v2', 'true');
-        setIsAdminAuthOpen(false);
-        setAuthPassword('');
-        setCloudAuthError('');
-        alert("Authentication successful! Cloud database is synchronized (Global).");
-        return true;
-      } else {
-        setCloudAuthError(`ACCESS DENIED: ${user?.email || 'unknown'} is not an authorized admin.`);
-        await supabase.auth.signOut();
-        return false;
-      }
-    } catch (err: any) {
-      console.error('Email/Password sign-in error:', err);
-      setCloudAuthError(err.message || String(err));
-      return false;
-    }
   };
 
   // Profile image upload has been permanently disabled — image is fixed
@@ -698,10 +593,8 @@ export default function App() {
 
   // Reset to initial list
   const handleResetWorks = async () => {
-    if (!isUserAdmin(currentUser)) {
-      setAuthTab('github');
+    if (!isAdmin) {
       setIsAdminAuthOpen(true);
-      alert('Cloud Authentication Required: Please authenticate your GitHub Admin Channel or use Email/Password first to reset the cloud database.');
       return;
     }
     try {
@@ -816,13 +709,11 @@ export default function App() {
     let finalThumbnailUrl = 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=600&auto=format&fit=crop&q=80'; 
 
     try {
-      // Ensure cloud auth before uploading globally
-      if (!isUserAdmin(currentUser)) {
+      // Ensure admin auth before uploading globally
+      if (!isAdmin) {
         setIsUploading(false);
         setUploadProgress('');
-        setAuthTab('github');
         setIsAdminAuthOpen(true);
-        alert('Cloud Authentication Required: Please authenticate your GitHub Admin Channel or use Email/Password first to upload and sync files globally.');
         return;
       }
 
@@ -920,11 +811,9 @@ export default function App() {
   const handleDeleteWorkItem = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     
-    // Ensure cloud auth before deleting globally
-    if (!isUserAdmin(currentUser)) {
-      setAuthTab('github');
+    // Ensure admin auth before deleting globally
+    if (!isAdmin) {
       setIsAdminAuthOpen(true);
-      alert('Cloud Authentication Required: Please authenticate your GitHub Admin Channel or use Email/Password first to delete items from the cloud database.');
       return;
     }
 
@@ -1325,33 +1214,12 @@ export default function App() {
                     🛰️ PORTFOLIO WORKSPACE ACTIVE
                   </span>
                   
-                  {isUserAdmin(currentUser) ? (
-                    <div className="bg-[#00ff00]/5 border border-[#00ff00]/20 p-1.5 rounded flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] animate-pulse shrink-0" />
-                      <span className="text-[7.5px] text-[#00ff00] font-mono uppercase font-extrabold leading-none">
-                        CLOUD SYNC CONNECTED (GLOBAL)
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="bg-amber-950/20 border border-amber-900/30 p-1.5 rounded flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                        <span className="text-[7.5px] text-amber-500 font-mono uppercase font-extrabold leading-none flex items-center gap-0.5">
-                          LOCAL PREVIEW (IFRAME BLOCK)
-                        </span>
-                      </div>
-                      <p className="text-[7.2px] text-zinc-400 leading-snug">
-                        GitHub Sign-In redirects may be blocked inside the preview iframe. Click below to open in a new tab, login, and upload globally:
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => window.open(window.location.origin, '_blank')}
-                        className="w-full py-1 text-center bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-black font-mono border border-amber-500/20 rounded text-[7px] font-extrabold cursor-pointer transition-all"
-                      >
-                        OPEN PORTFOLIO IN NEW TAB ↗
-                      </button>
-                    </div>
-                  )}
+                  <div className="bg-[#00ff00]/5 border border-[#00ff00]/20 p-1.5 rounded flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] animate-pulse shrink-0" />
+                    <span className="text-[7.5px] text-[#00ff00] font-mono uppercase font-extrabold leading-none">
+                      CLOUD SYNC CONNECTED (GLOBAL)
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
@@ -2273,7 +2141,7 @@ export default function App() {
               <div className="px-3 py-2 bg-zinc-950 border border-zinc-900 rounded flex flex-col gap-1">
                 <div className="flex items-center justify-between">
                   <span className="text-[8px] font-mono uppercase font-black text-zinc-500">DATABASE SYNC TARGET:</span>
-                  {isUserAdmin(currentUser) ? (
+                  {isAdmin ? (
                     <span className="text-[8.5px] font-mono bg-emerald-950/60 border border-emerald-800 text-[#00ff00] px-1.5 py-0.5 rounded font-extrabold flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] animate-ping" /> CLOUD DATABASE ACTIVE (GLOBAL)
                     </span>
@@ -2283,21 +2151,20 @@ export default function App() {
                     </span>
                   )}
                 </div>
-                 {!isUserAdmin(currentUser) && (
+                 {!isAdmin && (
                   <div className="flex flex-col gap-1.5 pt-1 border-t border-zinc-900 mt-1">
                     <p className="text-[8px] text-zinc-400 leading-snug">
-                      Notice: Your changes will only reside on your computer. To save to the live cloud database so that **everyone globally** sees your uploaded item, you must log in with your GitHub account or Email/Password admin account.
+                      Notice: Your changes will only reside on your computer. To save to the live cloud database so that **everyone globally** sees your uploaded item, you must authenticate with your Admin Password.
                     </p>
                     <button
                       type="button"
                       onClick={() => {
                         setIsUploadOpen(false);
-                        setAuthTab('github');
                         setIsAdminAuthOpen(true);
                       }}
                       className="py-1 bg-white hover:bg-zinc-200 text-black font-extrabold text-[8.5px] font-mono rounded transition-colors uppercase leading-none cursor-pointer"
                     >
-                      Authenticate Cloud Admin Channel
+                      Authenticate Admin Channel
                     </button>
                   </div>
                 )}
@@ -2533,7 +2400,7 @@ export default function App() {
                     </button>
                   </div>
 
-                  {currentUser && isUserAdmin(currentUser) ? (
+                  {isAdmin ? (
                     <div className="border border-green-500/20 bg-green-950/20 px-3 py-2.5 rounded-lg text-center flex flex-col gap-1 text-[#00ff00] font-mono text-[9.5px] font-extrabold uppercase tracking-widest animate-scale-up">
                       <span>✓ Authenticated successfully</span>
                       <span className="text-[7.5px] text-zinc-400 font-normal mt-0.5">Admin access is active. You can now upload and delete videos.</span>
@@ -2546,26 +2413,12 @@ export default function App() {
                       </button>
                     </div>
                   ) : (
-                    <form onSubmit={attemptEmailPasswordSignIn} className="flex flex-col gap-3 animate-fade-in">
+                    <form onSubmit={handleAdminLogin} className="flex flex-col gap-3 animate-fade-in">
                       <div className="text-[9.5px] text-zinc-400 font-mono text-center leading-normal mb-1">
-                        Authenticate via Supabase Email & Password to unlock the administrative video upload panel.
+                        Authenticate via Admin Password to unlock the administrative video upload panel.
                       </div>
                       
                       <div className="flex flex-col gap-2">
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[7.5px] text-zinc-400 font-mono uppercase tracking-[0.2em]">
-                            Admin Email Address
-                          </label>
-                          <input
-                            type="email"
-                            required
-                            placeholder="vasanthankasvk@gmail.com"
-                            value={authEmail}
-                            onChange={(e) => setAuthEmail(e.target.value)}
-                            className="bg-black border border-[#222] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono bg-zinc-950"
-                          />
-                        </div>
-
                         <div className="flex flex-col gap-1">
                           <label className="text-[7.5px] text-[#00ff00] font-mono uppercase tracking-[0.2em]">
                             Admin Password
@@ -2574,19 +2427,19 @@ export default function App() {
                             type="password"
                             required
                             placeholder="••••••••••••"
-                            value={authPassword}
+                            value={passcodeInput}
                             onChange={(e) => {
-                              setAuthPassword(e.target.value);
-                              if (cloudAuthError) setCloudAuthError('');
+                              setPasscodeInput(e.target.value);
+                              if (authError) setAuthError('');
                             }}
                             className="bg-black border border-[#222] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono bg-zinc-950"
                           />
                         </div>
                       </div>
 
-                      {cloudAuthError && (
+                      {authError && (
                         <div className="mt-1 text-red-500 font-mono text-[8px] text-center border border-red-500/10 bg-red-950/20 p-2 rounded leading-normal">
-                          ⚠️ {cloudAuthError}
+                          ⚠️ {authError}
                         </div>
                       )}
 
@@ -2602,7 +2455,7 @@ export default function App() {
               ) : (
                 <form onSubmit={handleConnectSupabase} className="flex flex-col gap-3 animate-fade-in">
                   <div className="text-[9.5px] text-zinc-400 font-mono text-center leading-normal">
-                    Enter your Supabase project API credentials below to connect the database and enable the email/password login form.
+                    Enter your Supabase project API credentials below to connect the database and enable the admin password verification form.
                   </div>
 
                   <div className="flex flex-col gap-2.5">
