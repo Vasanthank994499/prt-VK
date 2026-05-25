@@ -291,6 +291,7 @@ export default function App() {
   const [passcodeInput, setPasscodeInput] = useState('');
   const [authError, setAuthError] = useState('');
   const [authTab, setAuthTab] = useState<'github' | 'password'>('github');
+  const [githubAuthError, setGithubAuthError] = useState<string>('');
   const [authEmail, setAuthEmail] = useState('vasanthankasvk@gmail.com');
   const [authPassword, setAuthPassword] = useState('');
   const [cloudAuthError, setCloudAuthError] = useState('');
@@ -417,6 +418,12 @@ export default function App() {
 
   // Robust GitHub Sign-In with Supabase redirect
   const attemptGithubSignIn = async (): Promise<boolean> => {
+    setGithubAuthError('');
+    if (!hasSupabaseConfig) {
+      setGithubAuthError('Supabase credentials are not configured. Redirecting to Supabase Dashboard...');
+      window.open('https://supabase.com/dashboard/org/kaililoekwqkdcixgqfm', '_blank');
+      return false;
+    }
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'github',
@@ -428,7 +435,7 @@ export default function App() {
       return true;
     } catch (err: any) {
       console.error('Supabase GitHub Sign-In error:', err);
-      alert('GitHub Sign-In failed: ' + (err.message || String(err)));
+      setGithubAuthError(err.message || String(err));
       return false;
     }
   };
@@ -2528,18 +2535,38 @@ export default function App() {
                     SIGN IN WITH GITHUB
                   </button>
 
-                  <div className="text-[8px] text-zinc-500 font-mono text-center uppercase tracking-wider font-bold mt-1">
-                    Authorized Owner: <span className="text-[#00ff00]">Vasanthank994499</span>
-                  </div>
-
-                  {!hasSupabaseConfig && (
-                    <div className="mt-2 text-red-500 font-mono text-[7px] text-center border border-red-500/10 bg-red-950/20 p-2 rounded leading-normal">
-                      ⚠️ Supabase credentials are not configured in environment variables. 
-                      Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY on Vercel, or switch to the PASSWORD tab.
+                  {githubAuthError && (
+                    <div className="mt-2 text-amber-500 font-mono text-[7.5px] text-center border border-amber-500/10 bg-amber-950/20 p-2 rounded leading-normal flex flex-col gap-1.5">
+                      <div>⚠️ {githubAuthError}</div>
+                      {!hasSupabaseConfig && (
+                        <a
+                          href="https://supabase.com/dashboard/org/kaililoekwqkdcixgqfm"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 w-full py-1 text-center bg-amber-500 text-black font-extrabold uppercase rounded text-[7.5px] cursor-pointer block transition-colors hover:bg-amber-400"
+                        >
+                          Open Supabase Org Dashboard ↗
+                        </a>
+                      )}
                     </div>
                   )}
 
-                  <div className="text-zinc-600 font-mono text-[7px] text-center mt-2 leading-normal border-t border-zinc-900 pt-2">
+                  {!hasSupabaseConfig && !githubAuthError && (
+                    <div className="mt-2 text-zinc-500 font-mono text-[8px] text-center border border-zinc-800/40 bg-zinc-900/10 p-2.5 rounded-lg leading-normal flex flex-col gap-1.5">
+                      <div className="text-amber-500 font-bold uppercase text-[7.5px]">⚠️ Supabase connection pending</div>
+                      <div>VITE_SUPABASE_URL and key are not set on host.</div>
+                      <a
+                        href="https://supabase.com/dashboard/org/kaililoekwqkdcixgqfm"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="w-full py-1 text-center bg-zinc-900 border border-zinc-800 text-zinc-300 font-extrabold uppercase rounded text-[7px] cursor-pointer block transition-colors hover:bg-zinc-800"
+                      >
+                        Open Supabase Org Dashboard ↗
+                      </a>
+                    </div>
+                  )}
+
+                  <div className="text-zinc-650 font-mono text-[7px] text-center mt-2 leading-normal border-t border-zinc-900 pt-2">
                     GitHub login redirects to Supabase for secure admin validation.
                   </div>
                 </div>
@@ -2551,6 +2578,7 @@ export default function App() {
                       setIsAdminAuthOpen(false);
                       setPasscodeInput('');
                       setAuthError('');
+                      setGithubAuthError('');
                     }}
                     className="w-full py-1 bg-zinc-950 hover:bg-zinc-900 border border-[#222] text-zinc-450 font-mono text-[9px] rounded transition-colors cursor-pointer uppercase"
                   >
@@ -2559,15 +2587,15 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              <div className="p-5 flex flex-col gap-4 overflow-y-auto max-h-[380px]">
+              <div className="p-5 flex flex-col gap-4">
                 {/* SECTION 1: Passcode (Offline) */}
-                <form onSubmit={handleAdminLogin} className="flex flex-col gap-2">
+                <form onSubmit={handleAdminLogin} className="flex flex-col gap-3">
                   <div className="text-[8px] text-zinc-500 font-mono text-center uppercase tracking-widest font-bold">
-                    — OPTION A: OFFLINE PASSCODE KEY —
+                    — OFFLINE PASSCODE KEY —
                   </div>
                   
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[7.5px] text-[#00ff00] font-mono uppercase tracking-[0.2em]">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[7.5px] text-[#00ff00] font-mono uppercase tracking-[0.2em] text-center">
                       Security Passphrase Key
                     </label>
                     <input 
@@ -2596,59 +2624,6 @@ export default function App() {
                   </button>
                 </form>
 
-                <div className="h-px bg-zinc-900 my-1" />
-
-                {/* SECTION 2: Email/Password Login */}
-                <form onSubmit={attemptEmailPasswordSignIn} className="flex flex-col gap-2">
-                  <div className="text-[8px] text-zinc-500 font-mono text-center uppercase tracking-widest font-bold">
-                    — OPTION B: EMAIL & PASSWORD ACCESS —
-                  </div>
-                  
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[7.5px] text-zinc-400 font-mono uppercase tracking-[0.2em]">
-                      Admin Email Address
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="vasanthankasvk@gmail.com"
-                      value={authEmail}
-                      onChange={(e) => setAuthEmail(e.target.value)}
-                      className="bg-black border border-[#222] rounded px-2.5 py-1 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono bg-zinc-950"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[7.5px] text-[#00ff00] font-mono uppercase tracking-[0.2em]">
-                      Admin Password
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="••••••••••••"
-                      value={authPassword}
-                      onChange={(e) => {
-                        setAuthPassword(e.target.value);
-                        if (cloudAuthError) setCloudAuthError('');
-                      }}
-                      className="bg-black border border-[#222] rounded px-2.5 py-1 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono bg-zinc-950"
-                    />
-                  </div>
-
-                  {cloudAuthError && (
-                    <div className="text-[9px] text-red-500 font-mono text-center uppercase tracking-wider animate-pulse leading-normal">
-                      {cloudAuthError}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    className="w-full py-1.5 bg-[#00ff00]/10 border border-[#00ff00]/25 text-[#00ff00] hover:bg-[#00ff00] hover:text-black font-extrabold font-mono text-[9px] rounded transition-transform active:scale-98 cursor-pointer uppercase mt-1"
-                  >
-                    Log In & Synchronize
-                  </button>
-                </form>
-
                 <div className="flex gap-2 pt-2 border-t border-[#1a1a1a] mt-1">
                   <button
                     type="button"
@@ -2656,8 +2631,7 @@ export default function App() {
                       setIsAdminAuthOpen(false);
                       setPasscodeInput('');
                       setAuthError('');
-                      setAuthPassword('');
-                      setCloudAuthError('');
+                      setGithubAuthError('');
                     }}
                     className="w-full py-1 bg-zinc-950 hover:bg-zinc-900 border border-[#222] text-zinc-400 font-mono text-[9px] rounded transition-colors cursor-pointer uppercase"
                   >
