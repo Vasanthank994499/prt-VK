@@ -23,10 +23,7 @@ import {
   Sparkles
 } from 'lucide-react';
 
-import { db, auth, storage, handleFirestoreError, OperationType } from './firebase';
-import { doc, setDoc, deleteDoc, collection, onSnapshot, getDocs, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, signInWithEmailAndPassword } from 'firebase/auth';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { supabase } from './supabase';
 
 
 // Custom interface for Work items
@@ -286,84 +283,89 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState('vasanthankasvk@gmail.com');
   const [authPassword, setAuthPassword] = useState('');
   const [cloudAuthError, setCloudAuthError] = useState('');
+  const [currentUser, setCurrentUser] = useState<any>(null);
   
   // Storage upload overlays
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
 
-  // 1. Firebase Auth state changed observer
+  // 1. Supabase Auth state change observer
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user && user.email === 'vasanthankasvk@gmail.com' && user.emailVerified) {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const user = session?.user;
+      setCurrentUser(user || null);
+      if (user && user.email === 'vasanthankasvk@gmail.com') {
+        setIsAdmin(true);
+        localStorage.setItem('is_admin_v2', 'true');
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const user = session?.user;
+      setCurrentUser(user || null);
+      if (user && user.email === 'vasanthankasvk@gmail.com') {
         setIsAdmin(true);
         localStorage.setItem('is_admin_v2', 'true');
       } else {
-        if (user) {
+        if (event === 'SIGNED_OUT' || (user && user.email !== 'vasanthankasvk@gmail.com')) {
           setIsAdmin(false);
           localStorage.removeItem('is_admin_v2');
         }
       }
     });
-    return () => unsubscribe();
-  }, []);
 
-  // Handle Google Sign-In redirect result on page load
-  useEffect(() => {
-    getRedirectResult(auth).then((result) => {
-      if (result && result.user) {
-        const user = result.user;
-        if (user.email === 'vasanthankasvk@gmail.com' && user.emailVerified) {
-          setIsAdmin(true);
-          localStorage.setItem('is_admin_v2', 'true');
-        } else {
-          alert(`ACCESS DENIED: Only vasanthankasvk@gmail.com has write access.`);
-          signOut(auth);
-          setIsAdmin(false);
-          localStorage.removeItem('is_admin_v2');
-        }
-      }
-    }).catch((err) => {
-      console.error('Redirect sign-in error:', err);
-      alert('Redirect Sign-In failed: ' + (err?.message || String(err)));
-    });
+    return () => subscription.unsubscribe();
   }, []);
 
   // 2. Real-time Works synchronization listener hook
+  const fetchWorks = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('works')
+        .select('*');
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const mappedList = data.map((item: any) => ({
+          id: item.id,
+          title: item.title || '',
+          category: item.category || '',
+          type: item.type || 'normal',
+          videoUrl: item.video_url || '',
+          thumbnailUrl: item.thumbnail_url || '',
+          duration: item.duration || '',
+          softwareUsed: item.software_used || [],
+          description: item.description || '',
+          createdAt: item.created_at,
+        }));
+
+        mappedList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setWorks(mappedList);
+      } else {
+        setWorks(INITIAL_WORKS);
+      }
+    } catch (err: any) {
+      console.error('Error fetching works:', err);
+    }
+  };
+
   useEffect(() => {
-    const q = collection(db, 'works');
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const firestoreList: any[] = [];
-      snapshot.forEach((docRef) => {
-        const data = docRef.data();
-        firestoreList.push({
-          id: docRef.id,
-          title: data.title || '',
-          category: data.category || '',
-          type: data.type || 'normal',
-          videoUrl: data.videoUrl || '',
-          thumbnailUrl: data.thumbnailUrl || '',
-          duration: data.duration || '',
-          softwareUsed: data.softwareUsed || [],
-          description: data.description || '',
-          createdAt: data.createdAt,
-        });
-      });
+    fetchWorks();
 
-      const baseList = firestoreList.length === 0 ? INITIAL_WORKS : firestoreList;
+    const channel = supabase
+      .channel('works-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'works' },
+        () => {
+          fetchWorks();
+        }
+      )
+      .subscribe();
 
-      // Sort by createdAt descending
-      baseList.sort((a, b) => {
-        const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : Date.now());
-        const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : Date.now());
-        return timeB - timeA;
-      });
-
-      setWorks(baseList);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'works');
-    });
-
-    return () => unsubscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Profile image is now fixed and not synced from Firestore
@@ -396,80 +398,43 @@ export default function App() {
     setIsAdmin(false);
     localStorage.removeItem('is_admin_v2');
     try {
-      await signOut(auth);
+      await supabase.auth.signOut();
     } catch (err) {
       console.error(err);
     }
   };
 
-  // Robust Google Sign-In: tries popup first, asks before redirecting
+  // Robust Google Sign-In with Supabase redirect
   const attemptGoogleSignIn = async (): Promise<boolean> => {
-    const provider = new GoogleAuthProvider();
     try {
-      // Try popup first (works in most browsers)
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      if (user.email === 'vasanthankasvk@gmail.com' && user.emailVerified) {
-        setIsAdmin(true);
-        localStorage.setItem('is_admin_v2', 'true');
-        return true;
-      } else {
-        alert(`ACCESS DENIED: Only vasanthankasvk@gmail.com has write access. You signed in as ${user.email || 'unknown'}.`);
-        await signOut(auth);
-        return false;
-      }
-    } catch (popupErr: any) {
-      console.error('Google Sign-In error details:', popupErr);
-      
-      const errorCode = popupErr?.code;
-      const errorMessage = popupErr?.message || String(popupErr);
-      
-      if (errorCode === 'auth/unauthorized-domain') {
-        alert(
-          `UNAUTHORIZED DOMAIN:\n\n` +
-          `This domain (${window.location.hostname}) is not authorized in your Firebase Project.\n\n` +
-          `Please add "${window.location.hostname}" to: Firebase Console > Authentication > Settings > Authorized Domains.`
-        );
-        return false;
-      }
-      
-      if (errorCode === 'auth/operation-not-allowed') {
-        alert(
-          `GOOGLE SIGN-IN DISABLED:\n\n` +
-          `Google Sign-In provider is not enabled in your Firebase project.\n\n` +
-          `Please enable Google Sign-In in: Firebase Console > Authentication > Sign-in method.`
-        );
-        return false;
-      }
-
-      if (
-        errorCode === 'auth/popup-blocked' ||
-        errorCode === 'auth/popup-closed-by-user' ||
-        errorCode === 'auth/cancelled-popup-request'
-      ) {
-        const msg = errorCode === 'auth/popup-blocked' 
-          ? "The Google Sign-In popup was blocked by your browser."
-          : "The Google Sign-In popup was closed before completion.";
-        
-        if (confirm(`${msg}\n\nWould you like to try signing in via redirection instead?\n(Note: This will reload the page and redirect you to Google's sign-in page)`)) {
-          signInWithRedirect(auth, provider);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
         }
-        return false;
-      }
-
-      alert(`Google Sign-In failed:\nCode: ${errorCode}\nMessage: ${errorMessage}`);
+      });
+      if (error) throw error;
+      return true;
+    } catch (err: any) {
+      console.error('Supabase Google Sign-In error:', err);
+      alert('Google Sign-In failed: ' + (err.message || String(err)));
       return false;
     }
   };
 
-  // Firebase Email/Password Sign-In helper
+  // Supabase Email/Password Sign-In helper
   const attemptEmailPasswordSignIn = async (e: React.FormEvent): Promise<boolean> => {
     e.preventDefault();
     setCloudAuthError('');
     try {
-      const credential = await signInWithEmailAndPassword(auth, authEmail.trim(), authPassword);
-      const user = credential.user;
-      if (user.email === 'vasanthankasvk@gmail.com') {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: authEmail.trim(),
+        password: authPassword,
+      });
+      if (error) throw error;
+
+      const user = data.user;
+      if (user && user.email === 'vasanthankasvk@gmail.com') {
         setIsAdmin(true);
         localStorage.setItem('is_admin_v2', 'true');
         setIsAdminAuthOpen(false);
@@ -478,22 +443,13 @@ export default function App() {
         alert("Authentication successful! Cloud database is synchronized (Global).");
         return true;
       } else {
-        setCloudAuthError(`ACCESS DENIED: ${user.email} is not the admin email.`);
-        await signOut(auth);
+        setCloudAuthError(`ACCESS DENIED: ${user?.email || 'unknown'} is not the admin email.`);
+        await supabase.auth.signOut();
         return false;
       }
     } catch (err: any) {
       console.error('Email/Password sign-in error:', err);
-      const errorCode = err?.code;
-      let userMsg = err?.message || String(err);
-      if (errorCode === 'auth/user-not-found' || errorCode === 'auth/wrong-password' || errorCode === 'auth/invalid-credential') {
-        userMsg = 'Invalid email or password. Please verify your admin credentials.';
-      } else if (errorCode === 'auth/invalid-email') {
-        userMsg = 'Invalid email format.';
-      } else if (errorCode === 'auth/configuration-not-found') {
-        userMsg = 'Email/Password authentication provider is not enabled in Firebase Console.';
-      }
-      setCloudAuthError(userMsg);
+      setCloudAuthError(err.message || String(err));
       return false;
     }
   };
@@ -698,20 +654,28 @@ export default function App() {
 
   // Reset to initial list
   const handleResetWorks = async () => {
-    if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
+    if (!currentUser || currentUser.email !== 'vasanthankasvk@gmail.com') {
       setAuthTab('cloud');
       setIsAdminAuthOpen(true);
       alert('Cloud Authentication Required: Please authenticate your Google Admin Channel or use Email/Password first to reset the cloud database.');
       return;
     }
-    if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
-      try {
-        const snapshot = await getDocs(collection(db, 'works'));
-        const batchPromises = snapshot.docs.map((d) => deleteDoc(d.ref));
-        await Promise.all(batchPromises);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, 'works');
+    try {
+      const { data, error } = await supabase
+        .from('works')
+        .select('id');
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const { error: deleteErr } = await supabase
+          .from('works')
+          .delete()
+          .in('id', data.map((d: any) => d.id));
+        if (deleteErr) throw deleteErr;
       }
+    } catch (err: any) {
+      console.error('Error resetting works:', err);
+      alert('Error resetting works: ' + (err.message || String(err)));
     }
     setWorks(INITIAL_WORKS);
     setActiveTab('all');
@@ -795,7 +759,7 @@ export default function App() {
     }
   };
 
-  // Create & Insert New Work Item — GLOBAL ONLY (Firebase Storage + Firestore)
+  // Create & Insert New Work Item — GLOBAL ONLY (Supabase Storage + Database)
   const handleCreateWorkItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
@@ -809,7 +773,7 @@ export default function App() {
 
     try {
       // Ensure cloud auth before uploading globally
-      if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
+      if (!currentUser || currentUser.email !== 'vasanthankasvk@gmail.com') {
         setIsUploading(false);
         setUploadProgress('');
         setAuthTab('cloud');
@@ -825,44 +789,61 @@ export default function App() {
         suggestedSoftware = ['DaVinci Resolve'];
       }
 
-      // 1. Upload Video file to Firebase Storage or use URL
+      // 1. Upload Video file to Supabase Storage or use URL
       if (newVideoFile) {
         setUploadProgress(`Uploading video file "${newVideoFile.name}" to Cloud Storage...`);
-        const videoRef = ref(storage, `works/videos/${customId}_${newVideoFile.name}`);
-        const uploadSnap = await uploadBytes(videoRef, newVideoFile);
-        finalVideoUrl = await getDownloadURL(uploadSnap.ref);
+        const filePath = `videos/${customId}_${newVideoFile.name}`;
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('works')
+          .upload(filePath, newVideoFile);
+        if (uploadErr) throw uploadErr;
+
+        const { data: urlData } = supabase.storage
+          .from('works')
+          .getPublicUrl(filePath);
+        finalVideoUrl = urlData.publicUrl;
       } else if (newVideoUrl.trim()) {
         finalVideoUrl = newVideoUrl.trim();
       } else {
         finalVideoUrl = 'https://assets.mixkit.co/videos/preview/mixkit-recording-studio-with-microphone-and-monitors-43048-large.mp4';
       }
 
-      // 2. Upload Thumbnail file to Firebase Storage or use URL
+      // 2. Upload Thumbnail file to Supabase Storage or use URL
       if (newThumbnailFile) {
         setUploadProgress(`Uploading cover thumbnail file "${newThumbnailFile.name}" to Cloud Storage...`);
-        const thumbRef = ref(storage, `works/thumbnails/${customId}_${newThumbnailFile.name}`);
-        const uploadSnap = await uploadBytes(thumbRef, newThumbnailFile);
-        finalThumbnailUrl = await getDownloadURL(uploadSnap.ref);
+        const filePath = `thumbnails/${customId}_${newThumbnailFile.name}`;
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('works')
+          .upload(filePath, newThumbnailFile);
+        if (uploadErr) throw uploadErr;
+
+        const { data: urlData } = supabase.storage
+          .from('works')
+          .getPublicUrl(filePath);
+        finalThumbnailUrl = urlData.publicUrl;
       } else if (newThumbnailUrl.trim()) {
         finalThumbnailUrl = newThumbnailUrl.trim();
       }
 
-      // 3. Save work item to Firestore (globally visible to all visitors)
+      // 3. Save work item to Supabase Database (globally visible to all visitors)
       setUploadProgress('Saving work item to global database...');
       const customNewItem: any = {
         id: customId,
         title: newTitle.toUpperCase(),
         category: newCategory,
         type: newType,
-        videoUrl: finalVideoUrl,
-        thumbnailUrl: finalThumbnailUrl,
+        video_url: finalVideoUrl,
+        thumbnail_url: finalThumbnailUrl,
         duration: '0:30',
-        softwareUsed: suggestedSoftware,
-        description: newDescription.trim() || `Custom media uploaded via Vasanthan Portfolio Workspace.`,
-        createdAt: serverTimestamp()
+        software_used: suggestedSoftware,
+        description: newDescription.trim() || `Custom media uploaded via Vasanthan Portfolio Workspace.`
       };
 
-      await setDoc(doc(db, 'works', customId), customNewItem);
+      const { error: dbErr } = await supabase
+        .from('works')
+        .insert([customNewItem]);
+      if (dbErr) throw dbErr;
+
       alert('Work item added and synced globally for all visitors!');
 
       // Clear state and input file references
@@ -883,9 +864,9 @@ export default function App() {
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
 
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Error uploading or creating work item: ' + (err instanceof Error ? err.message : String(err)));
+      alert('Error uploading or creating work item: ' + (err?.message || String(err)));
     } finally {
       setIsUploading(false);
       setUploadProgress('');
@@ -896,7 +877,7 @@ export default function App() {
     e.stopPropagation();
     
     // Ensure cloud auth before deleting globally
-    if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
+    if (!currentUser || currentUser.email !== 'vasanthankasvk@gmail.com') {
       setAuthTab('cloud');
       setIsAdminAuthOpen(true);
       alert('Cloud Authentication Required: Please authenticate your Google Admin Channel or use Email/Password first to delete items from the cloud database.');
@@ -907,9 +888,14 @@ export default function App() {
       return;
     }
     try {
-      await deleteDoc(doc(db, 'works', id));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `works/${id}`);
+      const { error } = await supabase
+        .from('works')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Error deleting work item:', err);
+      alert('Error deleting work item: ' + (err.message || String(err)));
     }
     if (activeLightboxProject?.id === id) {
       setActiveLightboxProject(null);
@@ -1295,7 +1281,7 @@ export default function App() {
                     🛰️ PORTFOLIO WORKSPACE ACTIVE
                   </span>
                   
-                  {auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com' ? (
+                  {currentUser && currentUser.email === 'vasanthankasvk@gmail.com' ? (
                     <div className="bg-[#00ff00]/5 border border-[#00ff00]/20 p-1.5 rounded flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] animate-pulse shrink-0" />
                       <span className="text-[7.5px] text-[#00ff00] font-mono uppercase font-extrabold leading-none">
@@ -2243,9 +2229,9 @@ export default function App() {
               <div className="px-3 py-2 bg-zinc-950 border border-zinc-900 rounded flex flex-col gap-1">
                 <div className="flex items-center justify-between">
                   <span className="text-[8px] font-mono uppercase font-black text-zinc-500">DATABASE SYNC TARGET:</span>
-                  {auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com' ? (
+                  {currentUser && currentUser.email === 'vasanthankasvk@gmail.com' ? (
                     <span className="text-[8.5px] font-mono bg-emerald-950/60 border border-emerald-800 text-[#00ff00] px-1.5 py-0.5 rounded font-extrabold flex items-center gap-1">
-                      <span className="w-1 h-1 rounded-full bg-[#00ff00] animate-ping" /> CLOUD FIRESTORE ACTIVED (GLOBAL)
+                      <span className="w-1 h-1 rounded-full bg-[#00ff00] animate-ping" /> CLOUD DATABASE ACTIVE (GLOBAL)
                     </span>
                   ) : (
                     <span className="text-[8.5px] font-mono bg-amber-950/60 border border-amber-900 text-amber-500 px-1.5 py-0.5 rounded font-extrabold flex items-center gap-1">
@@ -2253,7 +2239,7 @@ export default function App() {
                     </span>
                   )}
                 </div>
-                 {(!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') && (
+                 {(!currentUser || currentUser.email !== 'vasanthankasvk@gmail.com') && (
                   <div className="flex flex-col gap-1.5 pt-1 border-t border-zinc-900 mt-1">
                     <p className="text-[8px] text-zinc-400 leading-snug">
                       Notice: Your changes will only reside on your computer. To save to the live cloud database so that **everyone globally** sees your uploaded item, you must log in with your Google account or Email/Password admin account.
