@@ -25,7 +25,7 @@ import {
 
 import { db, auth, storage, handleFirestoreError, OperationType } from './firebase';
 import { doc, setDoc, deleteDoc, collection, onSnapshot, getDocs, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, signInWithEmailAndPassword } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 
@@ -282,6 +282,10 @@ export default function App() {
   const [isAdminAuthOpen, setIsAdminAuthOpen] = useState(false);
   const [passcodeInput, setPasscodeInput] = useState('');
   const [authError, setAuthError] = useState('');
+  const [authTab, setAuthTab] = useState<'passcode' | 'cloud'>('passcode');
+  const [authEmail, setAuthEmail] = useState('vasanthankasvk@gmail.com');
+  const [authPassword, setAuthPassword] = useState('');
+  const [cloudAuthError, setCloudAuthError] = useState('');
   
   // Storage upload overlays
   const [isUploading, setIsUploading] = useState(false);
@@ -320,6 +324,7 @@ export default function App() {
       }
     }).catch((err) => {
       console.error('Redirect sign-in error:', err);
+      alert('Redirect Sign-In failed: ' + (err?.message || String(err)));
     });
   }, []);
 
@@ -397,7 +402,7 @@ export default function App() {
     }
   };
 
-  // Robust Google Sign-In: tries popup first, falls back to redirect if popup is blocked
+  // Robust Google Sign-In: tries popup first, asks before redirecting
   const attemptGoogleSignIn = async (): Promise<boolean> => {
     const provider = new GoogleAuthProvider();
     try {
@@ -414,20 +419,81 @@ export default function App() {
         return false;
       }
     } catch (popupErr: any) {
-      // If popup is blocked or fails, fall back to redirect
-      if (
-        popupErr?.code === 'auth/popup-blocked' ||
-        popupErr?.code === 'auth/popup-closed-by-user' ||
-        popupErr?.code === 'auth/cancelled-popup-request' ||
-        popupErr?.code === 'auth/unauthorized-domain'
-      ) {
-        // Use redirect as fallback — page will reload after sign-in
-        signInWithRedirect(auth, provider);
+      console.error('Google Sign-In error details:', popupErr);
+      
+      const errorCode = popupErr?.code;
+      const errorMessage = popupErr?.message || String(popupErr);
+      
+      if (errorCode === 'auth/unauthorized-domain') {
+        alert(
+          `UNAUTHORIZED DOMAIN:\n\n` +
+          `This domain (${window.location.hostname}) is not authorized in your Firebase Project.\n\n` +
+          `Please add "${window.location.hostname}" to: Firebase Console > Authentication > Settings > Authorized Domains.`
+        );
         return false;
       }
-      // For other errors, show the actual error message
-      console.error('Google Sign-In error:', popupErr);
-      alert('Google Sign-In failed: ' + (popupErr?.message || String(popupErr)));
+      
+      if (errorCode === 'auth/operation-not-allowed') {
+        alert(
+          `GOOGLE SIGN-IN DISABLED:\n\n` +
+          `Google Sign-In provider is not enabled in your Firebase project.\n\n` +
+          `Please enable Google Sign-In in: Firebase Console > Authentication > Sign-in method.`
+        );
+        return false;
+      }
+
+      if (
+        errorCode === 'auth/popup-blocked' ||
+        errorCode === 'auth/popup-closed-by-user' ||
+        errorCode === 'auth/cancelled-popup-request'
+      ) {
+        const msg = errorCode === 'auth/popup-blocked' 
+          ? "The Google Sign-In popup was blocked by your browser."
+          : "The Google Sign-In popup was closed before completion.";
+        
+        if (confirm(`${msg}\n\nWould you like to try signing in via redirection instead?\n(Note: This will reload the page and redirect you to Google's sign-in page)`)) {
+          signInWithRedirect(auth, provider);
+        }
+        return false;
+      }
+
+      alert(`Google Sign-In failed:\nCode: ${errorCode}\nMessage: ${errorMessage}`);
+      return false;
+    }
+  };
+
+  // Firebase Email/Password Sign-In helper
+  const attemptEmailPasswordSignIn = async (e: React.FormEvent): Promise<boolean> => {
+    e.preventDefault();
+    setCloudAuthError('');
+    try {
+      const credential = await signInWithEmailAndPassword(auth, authEmail.trim(), authPassword);
+      const user = credential.user;
+      if (user.email === 'vasanthankasvk@gmail.com') {
+        setIsAdmin(true);
+        localStorage.setItem('is_admin_v2', 'true');
+        setIsAdminAuthOpen(false);
+        setAuthPassword('');
+        setCloudAuthError('');
+        alert("Authentication successful! Cloud database is synchronized (Global).");
+        return true;
+      } else {
+        setCloudAuthError(`ACCESS DENIED: ${user.email} is not the admin email.`);
+        await signOut(auth);
+        return false;
+      }
+    } catch (err: any) {
+      console.error('Email/Password sign-in error:', err);
+      const errorCode = err?.code;
+      let userMsg = err?.message || String(err);
+      if (errorCode === 'auth/user-not-found' || errorCode === 'auth/wrong-password' || errorCode === 'auth/invalid-credential') {
+        userMsg = 'Invalid email or password. Please verify your admin credentials.';
+      } else if (errorCode === 'auth/invalid-email') {
+        userMsg = 'Invalid email format.';
+      } else if (errorCode === 'auth/configuration-not-found') {
+        userMsg = 'Email/Password authentication provider is not enabled in Firebase Console.';
+      }
+      setCloudAuthError(userMsg);
       return false;
     }
   };
@@ -633,8 +699,10 @@ export default function App() {
   // Reset to initial list
   const handleResetWorks = async () => {
     if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
-      const success = await attemptGoogleSignIn();
-      if (!success) return;
+      setAuthTab('cloud');
+      setIsAdminAuthOpen(true);
+      alert('Cloud Authentication Required: Please authenticate your Google Admin Channel or use Email/Password first to reset the cloud database.');
+      return;
     }
     if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
       try {
@@ -740,11 +808,14 @@ export default function App() {
     let finalThumbnailUrl = 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=600&auto=format&fit=crop&q=80'; 
 
     try {
-      // Ensure Google Sign-In before uploading globally
+      // Ensure cloud auth before uploading globally
       if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
-        setUploadProgress('Signing in with Google for global upload...');
-        const success = await attemptGoogleSignIn();
-        if (!success) return;
+        setIsUploading(false);
+        setUploadProgress('');
+        setAuthTab('cloud');
+        setIsAdminAuthOpen(true);
+        alert('Cloud Authentication Required: Please authenticate your Google Admin Channel or use Email/Password first to upload and sync files globally.');
+        return;
       }
 
       let suggestedSoftware = ['Premiere Pro'];
@@ -823,10 +894,17 @@ export default function App() {
 
   const handleDeleteWorkItem = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    // Ensure Google Sign-In before deleting globally
+    
+    // Ensure cloud auth before deleting globally
     if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
-      const success = await attemptGoogleSignIn();
-      if (!success) return;
+      setAuthTab('cloud');
+      setIsAdminAuthOpen(true);
+      alert('Cloud Authentication Required: Please authenticate your Google Admin Channel or use Email/Password first to delete items from the cloud database.');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to delete this work item globally from the database? This cannot be undone.')) {
+      return;
     }
     try {
       await deleteDoc(doc(db, 'works', id));
@@ -1383,7 +1461,10 @@ export default function App() {
               </button>
             ) : (
               <button 
-                onClick={() => setIsAdminAuthOpen(true)}
+                onClick={() => {
+                  setAuthTab('passcode');
+                  setIsAdminAuthOpen(true);
+                }}
                 className="w-full py-1.5 bg-[#030303] border border-[#111] text-zinc-650 hover:text-white hover:border-[#222] transition-colors rounded text-[9.5px] font-mono flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Lock size={10} /> OWNER ATTAINMENT
@@ -2146,17 +2227,21 @@ export default function App() {
                     </span>
                   )}
                 </div>
-                {(!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') && (
+                 {(!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') && (
                   <div className="flex flex-col gap-1.5 pt-1 border-t border-zinc-900 mt-1">
                     <p className="text-[8px] text-zinc-400 leading-snug">
-                      Notice: Your changes will only reside on your computer. To save to the live cloud database so that **everyone globally** sees your uploaded item, you must log in with your Google account.
+                      Notice: Your changes will only reside on your computer. To save to the live cloud database so that **everyone globally** sees your uploaded item, you must log in with your Google account or Email/Password admin account.
                     </p>
                     <button
                       type="button"
-                      onClick={() => attemptGoogleSignIn()}
-                      className="py-1 bg-white hover:bg-zinc-200 text-black font-extrabold text-[8.5px] font-mono rounded transition-colors uppercase leading-none"
+                      onClick={() => {
+                        setIsUploadOpen(false);
+                        setAuthTab('cloud');
+                        setIsAdminAuthOpen(true);
+                      }}
+                      className="py-1 bg-white hover:bg-zinc-200 text-black font-extrabold text-[8.5px] font-mono rounded transition-colors uppercase leading-none cursor-pointer"
                     >
-                      Authenticate Google Admin Channel
+                      Authenticate Cloud Admin Channel
                     </button>
                   </div>
                 )}
@@ -2344,6 +2429,8 @@ export default function App() {
             setIsAdminAuthOpen(false);
             setPasscodeInput('');
             setAuthError('');
+            setAuthPassword('');
+            setCloudAuthError('');
           }}
         >
           <div 
@@ -2362,6 +2449,8 @@ export default function App() {
                   setIsAdminAuthOpen(false);
                   setPasscodeInput('');
                   setAuthError('');
+                  setAuthPassword('');
+                  setCloudAuthError('');
                 }}
                 className="p-1 rounded text-zinc-500 hover:text-white cursor-pointer"
               >
@@ -2369,99 +2458,206 @@ export default function App() {
               </button>
             </div>
 
-            <form onSubmit={handleAdminLogin} className="p-5 flex flex-col gap-4">
-              <div className="text-[10px] text-zinc-500 font-mono text-center tracking-wide uppercase leading-normal">
-                A security key is required to append dynamic files and modify profile elements.
-              </div>
+            {/* TAB SELECTORS */}
+            <div className="flex border-b border-[#1a1a1a] bg-[#0c0c0c]">
+              <button
+                type="button"
+                onClick={() => setAuthTab('passcode')}
+                className={`flex-1 py-2 text-[9px] font-mono font-bold tracking-wider uppercase border-b-2 cursor-pointer transition-colors ${
+                  authTab === 'passcode'
+                    ? 'border-[#00ff00] text-[#00ff00] bg-black/40'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                Passcode (Offline)
+              </button>
+              <button
+                type="button"
+                onClick={() => setAuthTab('cloud')}
+                className={`flex-1 py-2 text-[9px] font-mono font-bold tracking-wider uppercase border-b-2 cursor-pointer transition-colors ${
+                  authTab === 'cloud'
+                    ? 'border-[#00ff00] text-[#00ff00] bg-black/40'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                Cloud (Sync DB)
+              </button>
+            </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] text-[#00ff00] font-mono uppercase tracking-[0.2em]">
-                  Security Key Passphrase
-                </label>
-                <input 
-                  type="password" 
-                  autoFocus
-                  placeholder="••••••••••••"
-                  value={passcodeInput}
-                  onChange={(e) => {
-                    setPasscodeInput(e.target.value);
-                    if (authError) setAuthError('');
-                  }}
-                  className="bg-black border border-[#222] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[#00ff00] font-mono text-center tracking-widest bg-zinc-950"
-                />
-              </div>
-
-              {authError && (
-                <div className="text-[10px] text-red-500 font-mono text-center uppercase tracking-wider animate-pulse">
-                  {authError}
+            {authTab === 'passcode' ? (
+              <form onSubmit={handleAdminLogin} className="p-5 flex flex-col gap-4">
+                <div className="text-[10px] text-zinc-500 font-mono text-center tracking-wide uppercase leading-normal">
+                  A security key is required to view admin workspace and edit local items offline.
                 </div>
-              )}
 
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAdminAuthOpen(false);
-                    setPasscodeInput('');
-                    setAuthError('');
-                  }}
-                  className="flex-1 py-1.5 bg-zinc-950 hover:bg-zinc-900 border border-[#222] text-zinc-400 font-mono text-[10px] rounded transition-colors cursor-pointer"
-                >
-                  CANCEL
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-1.5 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[10px] rounded transition-transform active:scale-98 cursor-pointer"
-                >
-                  VALIDATE
-                </button>
-              </div>
-
-              <div className="flex flex-col gap-2 border-t border-[#1a1a1a] pt-4 mt-1">
-                <div className="text-[8px] text-zinc-500 font-mono text-center uppercase tracking-widest mb-1 font-bold">
-                  — OR CONNECT CLOUD PERSISTENCE —
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[9px] text-[#00ff00] font-mono uppercase tracking-[0.2em]">
+                    Security Key Passphrase
+                  </label>
+                  <input 
+                    type="password" 
+                    autoFocus
+                    placeholder="••••••••••••"
+                    value={passcodeInput}
+                    onChange={(e) => {
+                      setPasscodeInput(e.target.value);
+                      if (authError) setAuthError('');
+                    }}
+                    className="bg-black border border-[#222] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[#00ff00] font-mono text-center tracking-widest bg-zinc-950"
+                  />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => attemptGoogleSignIn()}
-                  className="w-full py-2 bg-white hover:bg-zinc-200 text-black font-extrabold font-mono text-[9px] rounded flex items-center justify-center gap-2 transition-colors cursor-pointer"
-                >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.85c.87-2.6 3.3-4.53 6.16-4.53z"
-                    />
-                  </svg>
-                  SIGN IN WITH GOOGLE (OWNER)
-                </button>
-                <div className="text-amber-500 font-mono text-[7.5px] text-center border border-amber-500/10 bg-amber-950/20 p-1.5 rounded leading-normal">
-                  ⚠️ Google Auth popups are blocked by browsers inside the AI Studio iframe. To establish genuine cloud connection, please click:
+
+                {authError && (
+                  <div className="text-[10px] text-red-500 font-mono text-center uppercase tracking-wider animate-pulse">
+                    {authError}
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-2">
                   <button
                     type="button"
-                    onClick={() => window.open(window.location.origin, '_blank')}
-                    className="mt-1 w-full py-1 text-center bg-amber-500 text-black font-extrabold uppercase rounded text-[7.5px] cursor-pointer"
+                    onClick={() => {
+                      setIsAdminAuthOpen(false);
+                      setPasscodeInput('');
+                      setAuthError('');
+                    }}
+                    className="flex-1 py-1.5 bg-zinc-950 hover:bg-zinc-900 border border-[#222] text-zinc-400 font-mono text-[10px] rounded transition-colors cursor-pointer"
                   >
-                    Open Standalone Site ↗
+                    CANCEL
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-1.5 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[10px] rounded transition-transform active:scale-98 cursor-pointer"
+                  >
+                    VALIDATE
+                  </button>
+                </div>
+
+                <div className="text-[9px] text-zinc-650 font-mono text-center mt-1 leading-normal border-t border-[#161616] pt-3">
+                  Hint: Check URL options <code className="text-[#00ff00] bg-black px-1 py-0.5 rounded">?admin=true</code> to persist owner login.
+                </div>
+              </form>
+            ) : (
+              <div className="p-5 flex flex-col gap-4">
+                <div className="text-[10px] text-zinc-500 font-mono text-center tracking-wide uppercase leading-normal">
+                  Connect to your live Firebase Cloud to synchronize all uploads and modifications globally.
+                </div>
+
+                {/* Option A: Google Sign-in */}
+                <div className="flex flex-col gap-2">
+                  <div className="text-[8px] text-zinc-500 font-mono text-center uppercase tracking-widest font-bold">
+                    — OPTION A: CLOUD ACCESS —
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const success = await attemptGoogleSignIn();
+                      if (success) {
+                        setIsAdminAuthOpen(false);
+                      }
+                    }}
+                    className="w-full py-2 bg-white hover:bg-zinc-200 text-black font-extrabold font-mono text-[9px] rounded flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.85c.87-2.6 3.3-4.53 6.16-4.53z"
+                      />
+                    </svg>
+                    SIGN IN WITH GOOGLE
+                  </button>
+                  <div className="text-amber-500 font-mono text-[7px] text-center border border-amber-500/10 bg-amber-950/20 p-1.5 rounded leading-normal">
+                    ⚠️ Google Auth popups are blocked inside iframes. If clicking does not respond, try the Email/Password tab below, or open:
+                    <button
+                      type="button"
+                      onClick={() => window.open(window.location.origin, '_blank')}
+                      className="mt-1 w-full py-0.5 text-center bg-amber-500 text-black font-extrabold uppercase rounded text-[7px] cursor-pointer"
+                    >
+                      Standalone Link ↗
+                    </button>
+                  </div>
+                </div>
+
+                <div className="h-px bg-zinc-900 my-1" />
+
+                {/* Option B: Email/Password Login */}
+                <form onSubmit={attemptEmailPasswordSignIn} className="flex flex-col gap-2">
+                  <div className="text-[8px] text-zinc-500 font-mono text-center uppercase tracking-widest font-bold mb-1">
+                    — OPTION B: EMAIL & PASSWORD ACCESS —
+                  </div>
+                  
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[7.5px] text-zinc-400 font-mono uppercase tracking-[0.2em]">
+                      Admin Email Address
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="vasanthankasvk@gmail.com"
+                      value={authEmail}
+                      onChange={(e) => setAuthEmail(e.target.value)}
+                      className="bg-black border border-[#222] rounded px-2.5 py-1 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono bg-zinc-950"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[7.5px] text-[#00ff00] font-mono uppercase tracking-[0.2em]">
+                      Admin Password
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••••••"
+                      value={authPassword}
+                      onChange={(e) => {
+                        setAuthPassword(e.target.value);
+                        if (cloudAuthError) setCloudAuthError('');
+                      }}
+                      className="bg-black border border-[#222] rounded px-2.5 py-1 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono bg-zinc-950"
+                    />
+                  </div>
+
+                  {cloudAuthError && (
+                    <div className="text-[9px] text-red-500 font-mono text-center uppercase tracking-wider animate-pulse leading-normal">
+                      {cloudAuthError}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="w-full py-1.5 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[9px] rounded transition-transform active:scale-98 cursor-pointer uppercase mt-1"
+                  >
+                    Log In & Synchronize
+                  </button>
+                </form>
+
+                <div className="flex gap-2 pt-1 border-t border-[#1a1a1a]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAdminAuthOpen(false);
+                      setAuthPassword('');
+                      setCloudAuthError('');
+                    }}
+                    className="w-full py-1 bg-zinc-950 hover:bg-zinc-900 border border-[#222] text-zinc-400 font-mono text-[9px] rounded transition-colors cursor-pointer uppercase"
+                  >
+                    Close
                   </button>
                 </div>
               </div>
-
-              <div className="text-[9px] text-zinc-650 font-mono text-center mt-1 leading-normal">
-                Hint: Check URL options <code className="text-[#00ff00] bg-black px-1 py-0.5 rounded">?admin=true</code> to persist owner login.
-              </div>
-            </form>
+            )}
           </div>
         </div>
       )}
