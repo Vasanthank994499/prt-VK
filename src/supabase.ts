@@ -3,10 +3,19 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
+// Detect placeholder/fake credentials that would crash the app
+const isValidConfig =
+  supabaseUrl &&
+  supabaseAnonKey &&
+  !supabaseUrl.includes('your-supabase') &&
+  !supabaseAnonKey.includes('your-supabase') &&
+  supabaseUrl.startsWith('https://') &&
+  supabaseAnonKey.length > 20;
+
 // Robust fallback to prevent app crashes when environment variables are missing
 let supabaseClient: any;
 try {
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!isValidConfig) {
     console.warn('Supabase credentials are missing. Falling back to local preview mode.');
 
     // A deeply chainable no-op proxy: any property access or function call
