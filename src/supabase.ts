@@ -18,6 +18,8 @@ const checkValidConfig = (url: string, key: string) => {
     !url.includes('your-supabase') &&
     !key.includes('your-supabase') &&
     url.startsWith('https://') &&
+    !url.includes('supabase.com/dashboard') &&
+    !url.includes('supabase.com/orgs') &&
     key.length > 20
   );
 };

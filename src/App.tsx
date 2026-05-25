@@ -288,6 +288,13 @@ export default function App() {
   const handleConnectSupabase = (e: React.FormEvent) => {
     e.preventDefault();
     setGithubAuthError('');
+    
+    const urlClean = inputUrl.trim();
+    if (urlClean.includes('supabase.com/dashboard') || urlClean.includes('supabase.com/orgs')) {
+      setGithubAuthError('Error: You entered a Supabase Dashboard URL. Please use your Project API URL instead (e.g., https://your-project.supabase.co). Find this in Project Settings > API.');
+      return;
+    }
+
     const success = updateSupabaseCredentials(inputUrl, inputKey);
     if (success) {
       setIsConfiguredState(true);
@@ -801,7 +808,16 @@ export default function App() {
 
     } catch (err: any) {
       console.error(err);
-      alert('Error uploading or creating work item: ' + (err?.message || String(err)));
+      let userFriendlyMsg = err?.message || String(err);
+      if (userFriendlyMsg.includes('Failed to fetch')) {
+        userFriendlyMsg = 'Failed to fetch (Network Error).\n\n' +
+          'This is usually caused by one of the following:\n' +
+          '1. INVALID API URL: Make sure the URL in settings is your Supabase Project API URL (e.g., ending in .supabase.co), NOT the dashboard URL.\n' +
+          '2. MISSING STORAGE BUCKET: Check your Supabase Dashboard > Storage. You must create a bucket named exactly "works" (all lowercase).\n' +
+          '3. BUCKET NOT PUBLIC: Go to Storage > Bucket Settings on Supabase and make sure the "works" bucket is set to "Public" (enabled).\n' +
+          '4. RLS UPLOAD POLICY MISSING: You need an RLS policy on the "works" storage bucket to allow uploads. Go to Storage > Policies, click New Policy under "works" bucket, and select "Get started quickly" > "Allow public uploads" or "Enable read/write access for all users".';
+      }
+      alert('Error uploading or creating work item: ' + userFriendlyMsg);
     } finally {
       setIsUploading(false);
       setUploadProgress('');
