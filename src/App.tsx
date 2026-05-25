@@ -326,45 +326,14 @@ export default function App() {
 
       const baseList = firestoreList.length === 0 ? INITIAL_WORKS : firestoreList;
 
-      // Safe retrieval of local storage custom works
-      const localWorksRaw = localStorage.getItem('vasanthan_custom_works') || '[]';
-      let localWorks: any[] = [];
-      try {
-        localWorks = JSON.parse(localWorksRaw);
-      } catch (e) {
-        localWorks = [];
-      }
-
-      // Safe retrieval of local storage deleted works ids
-      const localDeletedIdsRaw = localStorage.getItem('vasanthan_deleted_works_ids') || '[]';
-      let localDeletedIds: string[] = [];
-      try {
-        localDeletedIds = JSON.parse(localDeletedIdsRaw);
-      } catch (e) {
-        localDeletedIds = [];
-      }
-
-      // Merge baseList and localWorks, filtering out deleted ones
-      const combined = [...localWorks, ...baseList];
-      const filtered = combined.filter((item: any) => !localDeletedIds.includes(item.id));
-
-      // Remove duplicates by ID
-      const uniqueMap = new Map();
-      filtered.forEach((item) => {
-        if (!uniqueMap.has(item.id)) {
-          uniqueMap.set(item.id, item);
-        }
-      });
-      const uniqueList = Array.from(uniqueMap.values());
-
-      // Sort by createdAt descending securely
-      uniqueList.sort((a, b) => {
+      // Sort by createdAt descending
+      baseList.sort((a, b) => {
         const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : Date.now());
         const timeB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : Date.now());
         return timeB - timeA;
       });
 
-      setWorks(uniqueList);
+      setWorks(baseList);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'works');
     });
@@ -608,6 +577,14 @@ export default function App() {
 
   // Reset to initial list
   const handleResetWorks = async () => {
+    if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
+      try {
+        await signInWithPopup(auth, new GoogleAuthProvider());
+      } catch (err) {
+        alert('Google Sign-In is required to reset works globally. Please try again.');
+        return;
+      }
+    }
     if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
       try {
         const snapshot = await getDocs(collection(db, 'works'));
@@ -617,8 +594,6 @@ export default function App() {
         handleFirestoreError(err, OperationType.DELETE, 'works');
       }
     }
-    localStorage.removeItem('vasanthan_custom_works');
-    localStorage.removeItem('vasanthan_deleted_works_ids');
     setWorks(INITIAL_WORKS);
     setActiveTab('all');
     setSelectedSoftware(null);
@@ -701,7 +676,7 @@ export default function App() {
     }
   };
 
-  // Create & Insert New Work Item with real-time sync
+  // Create & Insert New Work Item — GLOBAL ONLY (Firebase Storage + Firestore)
   const handleCreateWorkItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
@@ -714,6 +689,25 @@ export default function App() {
     let finalThumbnailUrl = 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=600&auto=format&fit=crop&q=80'; 
 
     try {
+      // Ensure Google Sign-In before uploading globally
+      if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
+        setUploadProgress('Signing in with Google for global upload...');
+        try {
+          await signInWithPopup(auth, new GoogleAuthProvider());
+        } catch (signInErr) {
+          alert('Google Sign-In is required to upload globally for all visitors. Please sign in and try again.');
+          return;
+        }
+        // Verify the signed-in account is the admin
+        if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
+          alert('You must sign in with the owner account (vasanthankasvk@gmail.com) to upload globally.');
+          await signOut(auth);
+          return;
+        }
+        setIsAdmin(true);
+        localStorage.setItem('is_admin_v2', 'true');
+      }
+
       let suggestedSoftware = ['Premiere Pro'];
       if (newCategory === 'Social Motion Design' || newCategory === 'Advanced Visual Effects') {
         suggestedSoftware = ['After Effects', 'Premiere Pro'];
@@ -721,106 +715,45 @@ export default function App() {
         suggestedSoftware = ['DaVinci Resolve'];
       }
 
-      if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
-        // 1. Evaluate Video URIs and upload file if present
-        if (newVideoFile) {
-          setUploadProgress(`Uploading video file "${newVideoFile.name}" to Cloud Storage...`);
-          const videoRef = ref(storage, `works/videos/${customId}_${newVideoFile.name}`);
-          const uploadSnap = await uploadBytes(videoRef, newVideoFile);
-          finalVideoUrl = await getDownloadURL(uploadSnap.ref);
-        } else if (newVideoUrl.trim()) {
-          finalVideoUrl = newVideoUrl.trim();
-        } else {
-          finalVideoUrl = 'https://assets.mixkit.co/videos/preview/mixkit-recording-studio-with-microphone-and-monitors-43048-large.mp4';
-        }
-
-        // 2. Evaluate Thumbnail URIs and upload file if present
-        if (newThumbnailFile) {
-          setUploadProgress(`Uploading cover thumbnail file "${newThumbnailFile.name}" to Cloud Storage...`);
-          const thumbRef = ref(storage, `works/thumbnails/${customId}_${newThumbnailFile.name}`);
-          const uploadSnap = await uploadBytes(thumbRef, newThumbnailFile);
-          finalThumbnailUrl = await getDownloadURL(uploadSnap.ref);
-        } else if (newThumbnailUrl.trim()) {
-          finalThumbnailUrl = newThumbnailUrl.trim();
-        }
-
-        const customNewItem: any = {
-          id: customId,
-          title: newTitle.toUpperCase(),
-          category: newCategory,
-          type: newType,
-          videoUrl: finalVideoUrl,
-          thumbnailUrl: finalThumbnailUrl,
-          duration: '0:30',
-          softwareUsed: suggestedSoftware,
-          description: newDescription.trim() || `Custom media uploaded via Vasanthan Portfolio Workspace.`,
-          createdAt: serverTimestamp()
-        };
-
-        await setDoc(doc(db, 'works', customId), customNewItem);
-        alert('Work item added and synced globally for all visitors!');
+      // 1. Upload Video file to Firebase Storage or use URL
+      if (newVideoFile) {
+        setUploadProgress(`Uploading video file "${newVideoFile.name}" to Cloud Storage...`);
+        const videoRef = ref(storage, `works/videos/${customId}_${newVideoFile.name}`);
+        const uploadSnap = await uploadBytes(videoRef, newVideoFile);
+        finalVideoUrl = await getDownloadURL(uploadSnap.ref);
+      } else if (newVideoUrl.trim()) {
+        finalVideoUrl = newVideoUrl.trim();
       } else {
-        // Local offline mode support for iFrame / Passcode admin, utilizing safe local storage persistence
-        if (newVideoFile) {
-          finalVideoUrl = newVideoBase64 || URL.createObjectURL(newVideoFile);
-        } else if (newVideoUrl.trim()) {
-          finalVideoUrl = newVideoUrl.trim();
-        } else {
-          finalVideoUrl = 'https://assets.mixkit.co/videos/preview/mixkit-recording-studio-with-microphone-and-monitors-43048-large.mp4';
-        }
-
-        if (newThumbnailFile) {
-          finalThumbnailUrl = newThumbnailBase64 || URL.createObjectURL(newThumbnailFile);
-        } else if (newThumbnailUrl.trim()) {
-          finalThumbnailUrl = newThumbnailUrl.trim();
-        }
-
-        const customNewItem: any = {
-          id: customId,
-          title: newTitle.toUpperCase(),
-          category: newCategory,
-          type: newType,
-          videoUrl: finalVideoUrl,
-          thumbnailUrl: finalThumbnailUrl,
-          duration: '0:30',
-          softwareUsed: suggestedSoftware,
-          description: newDescription.trim() || `Custom media uploaded via Vasanthan Portfolio Workspace.`,
-          createdAt: { seconds: Math.floor(Date.now() / 1000) }
-        };
-
-        const localWorksRaw = localStorage.getItem('vasanthan_custom_works') || '[]';
-        let localWorks: any[] = [];
-        try {
-          localWorks = JSON.parse(localWorksRaw);
-        } catch (e) {
-          localWorks = [];
-        }
-        localWorks.unshift(customNewItem);
-
-        try {
-          localStorage.setItem('vasanthan_custom_works', JSON.stringify(localWorks));
-        } catch (storageErr) {
-          console.warn('Storage quota exceeded, removing large base64 video payload to fit quota', storageErr);
-          // Fallback: use default video, but preserve metadata and thumbnail base64
-          const compactWorks = localWorks.map((w: any) => {
-            if (w.id === customId && w.videoUrl?.startsWith('data:')) {
-              return {
-                ...w,
-                videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-recording-studio-with-microphone-and-monitors-43048-large.mp4'
-              };
-            }
-            return w;
-          });
-          try {
-            localStorage.setItem('vasanthan_custom_works', JSON.stringify(compactWorks));
-          } catch (e) {
-            console.error('Final fallback localWorks cleanup: ', e);
-          }
-        }
-
-        setWorks((prev) => [customNewItem, ...prev]);
-        alert('Work item added and saved locally! Your changes will persist on this device. For global synchronization, open the app in a new tab.');
+        finalVideoUrl = 'https://assets.mixkit.co/videos/preview/mixkit-recording-studio-with-microphone-and-monitors-43048-large.mp4';
       }
+
+      // 2. Upload Thumbnail file to Firebase Storage or use URL
+      if (newThumbnailFile) {
+        setUploadProgress(`Uploading cover thumbnail file "${newThumbnailFile.name}" to Cloud Storage...`);
+        const thumbRef = ref(storage, `works/thumbnails/${customId}_${newThumbnailFile.name}`);
+        const uploadSnap = await uploadBytes(thumbRef, newThumbnailFile);
+        finalThumbnailUrl = await getDownloadURL(uploadSnap.ref);
+      } else if (newThumbnailUrl.trim()) {
+        finalThumbnailUrl = newThumbnailUrl.trim();
+      }
+
+      // 3. Save work item to Firestore (globally visible to all visitors)
+      setUploadProgress('Saving work item to global database...');
+      const customNewItem: any = {
+        id: customId,
+        title: newTitle.toUpperCase(),
+        category: newCategory,
+        type: newType,
+        videoUrl: finalVideoUrl,
+        thumbnailUrl: finalThumbnailUrl,
+        duration: '0:30',
+        softwareUsed: suggestedSoftware,
+        description: newDescription.trim() || `Custom media uploaded via Vasanthan Portfolio Workspace.`,
+        createdAt: serverTimestamp()
+      };
+
+      await setDoc(doc(db, 'works', customId), customNewItem);
+      alert('Work item added and synced globally for all visitors!');
 
       // Clear state and input file references
       setNewTitle('');
@@ -843,47 +776,34 @@ export default function App() {
     } catch (err) {
       console.error(err);
       alert('Error uploading or creating work item: ' + (err instanceof Error ? err.message : String(err)));
-    } {
+    } finally {
       setIsUploading(false);
       setUploadProgress('');
     }
   };
 
   const handleDeleteWorkItem = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation(); 
-    if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
+    e.stopPropagation();
+    // Ensure Google Sign-In before deleting globally
+    if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
       try {
-        await deleteDoc(doc(db, 'works', id));
+        await signInWithPopup(auth, new GoogleAuthProvider());
       } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `works/${id}`);
+        alert('Google Sign-In is required to delete works globally. Please try again.');
+        return;
       }
-    } else {
-      // Offline / unauthenticated local state preview deletion
-      const localDeletedIdsRaw = localStorage.getItem('vasanthan_deleted_works_ids') || '[]';
-      let localDeletedIds: string[] = [];
-      try {
-        localDeletedIds = JSON.parse(localDeletedIdsRaw);
-      } catch (e) {
-        localDeletedIds = [];
+      if (!auth.currentUser || auth.currentUser.email !== 'vasanthankasvk@gmail.com') {
+        alert('You must sign in with the owner account (vasanthankasvk@gmail.com) to delete works.');
+        await signOut(auth);
+        return;
       }
-      if (!localDeletedIds.includes(id)) {
-        localDeletedIds.push(id);
-        localStorage.setItem('vasanthan_deleted_works_ids', JSON.stringify(localDeletedIds));
-      }
-
-      // Also remove from local custom works if it was there to save storage
-      const localWorksRaw = localStorage.getItem('vasanthan_custom_works') || '[]';
-      let localWorks: any[] = [];
-      try {
-        localWorks = JSON.parse(localWorksRaw);
-      } catch (e) {
-        localWorks = [];
-      }
-      const filteredLocalWorks = localWorks.filter((w: any) => w.id !== id);
-      localStorage.setItem('vasanthan_custom_works', JSON.stringify(filteredLocalWorks));
-
-      // Update state
-      setWorks((prev) => prev.filter(w => w.id !== id));
+      setIsAdmin(true);
+      localStorage.setItem('is_admin_v2', 'true');
+    }
+    try {
+      await deleteDoc(doc(db, 'works', id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `works/${id}`);
     }
     if (activeLightboxProject?.id === id) {
       setActiveLightboxProject(null);
