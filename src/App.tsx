@@ -1105,7 +1105,7 @@ export default function App() {
       </div>
 
       {/* HEADER SECTION - PERFECT SINGLE CHIP NAVIGATION SEPARATED BY STRAIGHT PERPENDICULAR LINES */}
-      <header id="portfolio-header" className="sticky top-0 z-40 border-b border-[#1a1a1a] bg-black/85 backdrop-blur-md px-4 sm:px-8 py-4 flex items-center justify-between">
+      <header id="portfolio-header" className="sticky lg:sticky max-lg:fixed max-lg:top-0 max-lg:left-0 max-lg:right-0 max-lg:w-full z-40 border-b border-[#1a1a1a] bg-black/85 backdrop-blur-md px-4 sm:px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button 
             onClick={(e) => handleNavClick('dashboard', e)} 
@@ -1175,10 +1175,13 @@ export default function App() {
           {isMobileMenuOpen ? <X size={20} /> : <Sliders size={20} />}
         </button>
       </header>
+      
+      {/* Spacer for fixed mobile/tab header */}
+      <div className="h-[73px] lg:hidden" />
 
       {/* MOBILE NAV PANEL */}
       {isMobileMenuOpen && (
-        <div id="mobile-nav" className="md:hidden border-b border-[#1a1a1a] bg-[#050505] p-6 flex flex-col gap-4 animate-fade-in z-30">
+        <div id="mobile-nav" className="fixed top-[73px] left-0 right-0 z-30 border-b border-[#1a1a1a] bg-[#050505] p-6 flex flex-col gap-4 animate-fade-in">
           <div className="flex flex-col gap-3">
             <button 
               onClick={(e) => handleNavClick('dashboard', e)}
@@ -1231,11 +1234,34 @@ export default function App() {
               LINKEDIN 😊
             </a>
           </div>
+          <div className="h-px bg-[#111] my-1" />
+          {isAdmin ? (
+            <button 
+              onClick={() => {
+                handleAdminLogout();
+                setIsMobileMenuOpen(false);
+              }}
+              className="w-full py-2 bg-[#00ff00]/10 border border-[#00ff00]/25 hover:bg-[#00ff00] hover:text-black hover:border-transparent text-[#00ff00] transition-colors rounded text-xs font-mono flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Unlock size={11} /> LOCK CONSOLE (LOGOUT)
+            </button>
+          ) : (
+            <button 
+              onClick={() => {
+                setAuthTab('passcode');
+                setIsAdminAuthOpen(true);
+                setIsMobileMenuOpen(false);
+              }}
+              className="w-full py-2 bg-[#030303] border border-[#111] text-zinc-400 hover:text-white hover:border-[#222] transition-colors rounded text-xs font-mono flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Lock size={11} /> OWNER LOGIN
+            </button>
+          )}
         </div>
       )}
 
       {/* MAIN DUAL/TRIPLE PANEL DASHBOARD LAYOUT GRID - HIGHLY RESPONSIVE */}
-      <div id="portfolio-dashboard-grid" className="flex-1 w-full max-w-[1700px] mx-auto grid grid-cols-1 lg:grid-cols-[250px_1fr] xl:grid-cols-[260px_1fr_300px] gap-0 border-b border-[#1a1a1a]">
+      <div id="portfolio-dashboard-grid" className="flex-1 w-full max-w-[1700px] mx-auto grid grid-cols-1 lg:grid-cols-[240px_1fr_275px] xl:grid-cols-[260px_1fr_300px] gap-0 border-b border-[#1a1a1a]">
         
         {/* LEFT SIDEBAR PANEL */}
         <aside id="dashboard-sidebar-left" className="border-r border-[#1a1a1a] p-4 sm:p-6 flex flex-col gap-8 bg-[#030303] lg:sticky lg:top-[80px] lg:h-[calc(100vh-80px)] overflow-y-auto w-full">
