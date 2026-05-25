@@ -290,7 +290,7 @@ export default function App() {
   const [isAdminAuthOpen, setIsAdminAuthOpen] = useState(false);
   const [passcodeInput, setPasscodeInput] = useState('');
   const [authError, setAuthError] = useState('');
-  const [authTab, setAuthTab] = useState<'passcode' | 'cloud'>('passcode');
+  const [authTab, setAuthTab] = useState<'github' | 'password'>('github');
   const [authEmail, setAuthEmail] = useState('vasanthankasvk@gmail.com');
   const [authPassword, setAuthPassword] = useState('');
   const [cloudAuthError, setCloudAuthError] = useState('');
@@ -666,7 +666,7 @@ export default function App() {
   // Reset to initial list
   const handleResetWorks = async () => {
     if (!isUserAdmin(currentUser)) {
-      setAuthTab('cloud');
+      setAuthTab('github');
       setIsAdminAuthOpen(true);
       alert('Cloud Authentication Required: Please authenticate your GitHub Admin Channel or use Email/Password first to reset the cloud database.');
       return;
@@ -787,7 +787,7 @@ export default function App() {
       if (!isUserAdmin(currentUser)) {
         setIsUploading(false);
         setUploadProgress('');
-        setAuthTab('cloud');
+        setAuthTab('github');
         setIsAdminAuthOpen(true);
         alert('Cloud Authentication Required: Please authenticate your GitHub Admin Channel or use Email/Password first to upload and sync files globally.');
         return;
@@ -889,7 +889,7 @@ export default function App() {
     
     // Ensure cloud auth before deleting globally
     if (!isUserAdmin(currentUser)) {
-      setAuthTab('cloud');
+      setAuthTab('github');
       setIsAdminAuthOpen(true);
       alert('Cloud Authentication Required: Please authenticate your GitHub Admin Channel or use Email/Password first to delete items from the cloud database.');
       return;
@@ -1245,7 +1245,7 @@ export default function App() {
           ) : (
             <button 
               onClick={() => {
-                setAuthTab('passcode');
+                setAuthTab('github');
                 setIsAdminAuthOpen(true);
                 setIsMobileMenuOpen(false);
               }}
@@ -1485,7 +1485,7 @@ export default function App() {
             ) : (
               <button 
                 onClick={() => {
-                  setAuthTab('passcode');
+                  setAuthTab('github');
                   setIsAdminAuthOpen(true);
                 }}
                 className="w-full py-1.5 bg-[#030303] border border-[#111] text-zinc-650 hover:text-white hover:border-[#222] transition-colors rounded text-[9.5px] font-mono flex items-center justify-center gap-1.5 cursor-pointer"
@@ -2259,7 +2259,7 @@ export default function App() {
                       type="button"
                       onClick={() => {
                         setIsUploadOpen(false);
-                        setAuthTab('cloud');
+                        setAuthTab('github');
                         setIsAdminAuthOpen(true);
                       }}
                       className="py-1 bg-white hover:bg-zinc-200 text-black font-extrabold text-[8.5px] font-mono rounded transition-colors uppercase leading-none cursor-pointer"
@@ -2485,143 +2485,35 @@ export default function App() {
             <div className="flex border-b border-[#1a1a1a] bg-[#0c0c0c]">
               <button
                 type="button"
-                onClick={() => setAuthTab('passcode')}
+                onClick={() => setAuthTab('github')}
                 className={`flex-1 py-2 text-[9px] font-mono font-bold tracking-wider uppercase border-b-2 cursor-pointer transition-colors ${
-                  authTab === 'passcode'
+                  authTab === 'github'
                     ? 'border-[#00ff00] text-[#00ff00] bg-black/40'
                     : 'border-transparent text-zinc-500 hover:text-zinc-300'
                 }`}
               >
-                Passcode (Offline)
+                GitHub Cloud
               </button>
               <button
                 type="button"
-                onClick={() => setAuthTab('cloud')}
+                onClick={() => setAuthTab('password')}
                 className={`flex-1 py-2 text-[9px] font-mono font-bold tracking-wider uppercase border-b-2 cursor-pointer transition-colors ${
-                  authTab === 'cloud'
+                  authTab === 'password'
                     ? 'border-[#00ff00] text-[#00ff00] bg-black/40'
                     : 'border-transparent text-zinc-500 hover:text-zinc-300'
                 }`}
               >
-                Cloud (Sync DB)
+                Password Access
               </button>
             </div>
 
-            {authTab === 'passcode' ? (
-              <form onSubmit={handleAdminLogin} className="p-5 flex flex-col gap-4">
-                <div className="text-[10px] text-zinc-500 font-mono text-center tracking-wide uppercase leading-normal">
-                  A security key is required to view admin workspace and edit local items offline.
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] text-[#00ff00] font-mono uppercase tracking-[0.2em]">
-                    Security Key Passphrase
-                  </label>
-                  <input 
-                    type="password" 
-                    autoFocus
-                    placeholder="••••••••••••"
-                    value={passcodeInput}
-                    onChange={(e) => {
-                      setPasscodeInput(e.target.value);
-                      if (authError) setAuthError('');
-                    }}
-                    className="bg-black border border-[#222] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[#00ff00] font-mono text-center tracking-widest bg-zinc-950"
-                  />
-                </div>
-
-                {authError && (
-                  <div className="text-[10px] text-red-500 font-mono text-center uppercase tracking-wider animate-pulse">
-                    {authError}
-                  </div>
-                )}
-
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAdminAuthOpen(false);
-                      setPasscodeInput('');
-                      setAuthError('');
-                    }}
-                    className="flex-1 py-1.5 bg-zinc-950 hover:bg-zinc-900 border border-[#222] text-zinc-400 font-mono text-[10px] rounded transition-colors cursor-pointer"
-                  >
-                    CANCEL
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-1.5 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[10px] rounded transition-transform active:scale-98 cursor-pointer"
-                  >
-                    VALIDATE
-                  </button>
-                </div>
-
-                <div className="text-[9px] text-zinc-650 font-mono text-center mt-1 leading-normal border-t border-[#161616] pt-3">
-                  Hint: Check URL options <code className="text-[#00ff00] bg-black px-1 py-0.5 rounded">?admin=true</code> to persist owner login.
-                </div>
-              </form>
-            ) : !hasSupabaseConfig ? (
-              <div className="p-5 flex flex-col gap-3">
-                <div className="border border-red-500/20 bg-red-950/20 p-3 rounded-lg text-center flex flex-col gap-2">
-                  <div className="text-[10px] text-red-500 font-mono font-extrabold uppercase tracking-wider">
-                    ⚠️ Supabase Config Missing
-                  </div>
-                  <div className="text-[8px] text-zinc-400 font-mono leading-normal text-left">
-                    Live Supabase database and GitHub login are not configured. To fix this:
-                  </div>
-                  <div className="text-[8.5px] text-zinc-300 font-mono text-left space-y-1.5 list-decimal pl-3.5 leading-normal">
-                    <div>1. Go to <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-[#00ff00] underline">supabase.com</a> and copy your project URL and anon public API key.</div>
-                    <div>2. Go to your <span className="text-[#00ff00] font-bold">Vercel Project Settings</span> &rarr; <span className="font-bold">Environment Variables</span>.</div>
-                    <div>3. Add these two variables:
-                      <div className="mt-1 font-bold text-white bg-black/60 px-1.5 py-0.5 rounded text-[7.5px] border border-[#222]">VITE_SUPABASE_URL</div>
-                      <div className="mt-0.5 font-bold text-white bg-black/60 px-1.5 py-0.5 rounded text-[7.5px] border border-[#222]">VITE_SUPABASE_ANON_KEY</div>
-                    </div>
-                    <div>4. Redeploy your project or push a new commit to apply.</div>
-                  </div>
-                </div>
-
-                <div className="text-[8.5px] text-zinc-500 font-mono text-center leading-normal">
-                  You can still test all admin uploading features offline using the local demo mode:
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAdmin(true);
-                    localStorage.setItem('is_admin_v2', 'true');
-                    setIsAdminAuthOpen(false);
-                  }}
-                  className="w-full py-2 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[9px] rounded flex items-center justify-center gap-1.5 transition-transform active:scale-98 cursor-pointer uppercase"
-                >
-                  <Unlock className="w-3.5 h-3.5" />
-                  Enable Offline Demo Admin
-                </button>
-
-                <div className="flex gap-2 pt-1 border-t border-[#1a1a1a] mt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAdminAuthOpen(false);
-                      setAuthPassword('');
-                      setCloudAuthError('');
-                    }}
-                    className="w-full py-1 bg-zinc-950 hover:bg-zinc-900 border border-[#222] text-zinc-400 font-mono text-[9px] rounded transition-colors cursor-pointer uppercase"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            ) : (
+            {authTab === 'github' ? (
               <div className="p-5 flex flex-col gap-4">
                 <div className="text-[10px] text-zinc-500 font-mono text-center tracking-wide uppercase leading-normal">
-                  Connect to your live Supabase Cloud to synchronize all uploads and modifications globally.
+                  Authenticate via GitHub OAuth to sync uploads and manage the live portfolio database.
                 </div>
 
-                {/* Option A: GitHub Sign-in */}
                 <div className="flex flex-col gap-2">
-                  <div className="text-[8px] text-zinc-500 font-mono text-center uppercase tracking-widest font-bold">
-                    — OPTION A: CLOUD ACCESS —
-                  </div>
                   <button
                     type="button"
                     onClick={async () => {
@@ -2630,28 +2522,85 @@ export default function App() {
                         setIsAdminAuthOpen(false);
                       }
                     }}
-                    className="w-full py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-extrabold font-mono text-[9px] rounded flex items-center justify-center gap-2 border border-zinc-800 transition-colors cursor-pointer"
+                    className="w-full py-2.5 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[10px] rounded flex items-center justify-center gap-2 transition-transform active:scale-98 cursor-pointer uppercase shadow-lg shadow-green-500/10"
                   >
-                    <Github className="w-3.5 h-3.5 text-white" />
+                    <Github className="w-4 h-4 text-black" />
                     SIGN IN WITH GITHUB
                   </button>
-                  <div className="text-amber-500 font-mono text-[7px] text-center border border-amber-500/10 bg-amber-950/20 p-1.5 rounded leading-normal">
-                    ⚠️ GitHub Sign-In redirects may be blocked inside iframes. If clicking does not redirect, try the Email/Password tab below, or open:
-                    <button
-                      type="button"
-                      onClick={() => window.open(window.location.origin, '_blank')}
-                      className="mt-1 w-full py-0.5 text-center bg-amber-500 text-black font-extrabold uppercase rounded text-[7px] cursor-pointer"
-                    >
-                      Standalone Link ↗
-                    </button>
+
+                  <div className="text-[8px] text-zinc-500 font-mono text-center uppercase tracking-wider font-bold mt-1">
+                    Authorized Owner: <span className="text-[#00ff00]">Vasanthank994499</span>
+                  </div>
+
+                  {!hasSupabaseConfig && (
+                    <div className="mt-2 text-red-500 font-mono text-[7px] text-center border border-red-500/10 bg-red-950/20 p-2 rounded leading-normal">
+                      ⚠️ Supabase credentials are not configured in environment variables. 
+                      Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY on Vercel, or switch to the PASSWORD tab.
+                    </div>
+                  )}
+
+                  <div className="text-zinc-600 font-mono text-[7px] text-center mt-2 leading-normal border-t border-zinc-900 pt-2">
+                    GitHub login redirects to Supabase for secure admin validation.
                   </div>
                 </div>
 
+                <div className="flex gap-2 pt-2 border-t border-[#1a1a1a] mt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAdminAuthOpen(false);
+                      setPasscodeInput('');
+                      setAuthError('');
+                    }}
+                    className="w-full py-1 bg-zinc-950 hover:bg-zinc-900 border border-[#222] text-zinc-450 font-mono text-[9px] rounded transition-colors cursor-pointer uppercase"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-5 flex flex-col gap-4 overflow-y-auto max-h-[380px]">
+                {/* SECTION 1: Passcode (Offline) */}
+                <form onSubmit={handleAdminLogin} className="flex flex-col gap-2">
+                  <div className="text-[8px] text-zinc-500 font-mono text-center uppercase tracking-widest font-bold">
+                    — OPTION A: OFFLINE PASSCODE KEY —
+                  </div>
+                  
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[7.5px] text-[#00ff00] font-mono uppercase tracking-[0.2em]">
+                      Security Passphrase Key
+                    </label>
+                    <input 
+                      type="password" 
+                      placeholder="••••••••••••"
+                      value={passcodeInput}
+                      onChange={(e) => {
+                        setPasscodeInput(e.target.value);
+                        if (authError) setAuthError('');
+                      }}
+                      className="bg-black border border-[#222] rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono text-center tracking-widest bg-zinc-950"
+                    />
+                  </div>
+
+                  {authError && (
+                    <div className="text-[9px] text-red-500 font-mono text-center uppercase tracking-wider animate-pulse">
+                      {authError}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="w-full py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-800 font-extrabold font-mono text-[9px] rounded transition-transform active:scale-98 cursor-pointer uppercase mt-0.5"
+                  >
+                    Validate Offline Key
+                  </button>
+                </form>
+
                 <div className="h-px bg-zinc-900 my-1" />
 
-                {/* Option B: Email/Password Login */}
+                {/* SECTION 2: Email/Password Login */}
                 <form onSubmit={attemptEmailPasswordSignIn} className="flex flex-col gap-2">
-                  <div className="text-[8px] text-zinc-500 font-mono text-center uppercase tracking-widest font-bold mb-1">
+                  <div className="text-[8px] text-zinc-500 font-mono text-center uppercase tracking-widest font-bold">
                     — OPTION B: EMAIL & PASSWORD ACCESS —
                   </div>
                   
@@ -2694,17 +2643,19 @@ export default function App() {
 
                   <button
                     type="submit"
-                    className="w-full py-1.5 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[9px] rounded transition-transform active:scale-98 cursor-pointer uppercase mt-1"
+                    className="w-full py-1.5 bg-[#00ff00]/10 border border-[#00ff00]/25 text-[#00ff00] hover:bg-[#00ff00] hover:text-black font-extrabold font-mono text-[9px] rounded transition-transform active:scale-98 cursor-pointer uppercase mt-1"
                   >
                     Log In & Synchronize
                   </button>
                 </form>
 
-                <div className="flex gap-2 pt-1 border-t border-[#1a1a1a]">
+                <div className="flex gap-2 pt-2 border-t border-[#1a1a1a] mt-1">
                   <button
                     type="button"
                     onClick={() => {
                       setIsAdminAuthOpen(false);
+                      setPasscodeInput('');
+                      setAuthError('');
                       setAuthPassword('');
                       setCloudAuthError('');
                     }}
