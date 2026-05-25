@@ -247,8 +247,8 @@ const renderCategoryIcon = (iconName: string) => {
   }
 };
 
-// Custom default profile path matching Vasanthan K
-const DEFAULT_AVATAR_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="100%" height="100%"><defs><radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="%2300ff00" stop-opacity="0.15"/><stop offset="100%" stop-color="%23000000" stop-opacity="0"/></radialGradient></defs><rect width="120" height="120" fill="%23030303"/><circle cx="60" cy="60" r="50" fill="url(%23glow)"/><circle cx="60" cy="60" r="45" fill="none" stroke="%23111" stroke-width="1"/><circle cx="60" cy="60" r="45" fill="none" stroke="%2300ff00" stroke-width="1.5" stroke-dasharray="20 10 5 10"/><path d="M35 110 C 35 90, 45 80, 60 80 C 75 80, 85 90, 85 110 Z" fill="%23ffffff" stroke="%23e0e0e0" stroke-width="1"/><path d="M50 80 L 60 93 L 70 80" fill="none" stroke="%23ccc" stroke-width="1.5"/><path d="M60 93 L 60 110" fill="none" stroke="%23ccc" stroke-width="1" stroke-dasharray="2 2"/><path d="M53 70 L 53 82 C 53 82, 60 85, 67 82 L 67 70 Z" fill="%23d4a373"/><path d="M48 48 C 48 38, 72 38, 72 48 C 72 58, 68 68, 60 68 C 52 68, 48 58, 48 48 Z" fill="%23e9c46a"/><circle cx="48" cy="50" r="4" fill="%23e9c46a"/><path d="M47 43 C 47 33, 73 31, 73 41 C 70 38, 55 35, 47 43 Z" fill="%23111111"/><path d="M48 44 C 45 46, 45 35, 60 32 C 75 29, 73 38, 73 42 C 73 42, 64 36, 48 44 Z" fill="%231c1c1c"/><path d="M48 50 C 48 62, 53 72, 60 72 C 67 72, 72 62, 72 50 C 72 54, 70 66, 60 67 C 50 66, 48 54, 48 50 Z" fill="%231c1c1c"/><path d="M51 58 C 55 60, 65 60, 69 58 C 71 63, 67 71, 60 71 C 53 71, 49 63, 51 58 Z" fill="%23111111"/><path d="M54 55 Q 60 58 66 55" fill="none" stroke="%23111111" stroke-width="2.5"/><path d="M58 45 Q 61 44 64 45" fill="none" stroke="%23111111" stroke-width="1.5"/><circle cx="61" cy="48" r="1.5" fill="%23111111"/><path d="M15 35 L 15 20 L 30 20" fill="none" stroke="%2300ff00" stroke-width="1" stroke-opacity="0.6"/><path d="M105 35 L 105 20 L 90 20" fill="none" stroke="%2300ff00" stroke-width="1" stroke-opacity="0.6"/><path d="M15 85 L 15 100 L 30 100" fill="none" stroke="%2300ff00" stroke-width="1" stroke-opacity="0.6"/><path d="M105 85 L 105 100 L 90 100" fill="none" stroke="%2300ff00" stroke-width="1" stroke-opacity="0.6"/></svg>`;
+// Fixed profile image — permanently set, not changeable
+const PROFILE_IMAGE_PATH = '/profile.png';
 
 export default function App() {
   const [works, setWorks] = useState<WorkItem[]>([]);
@@ -272,10 +272,8 @@ export default function App() {
   const [thumbnailSizeWarning, setThumbnailSizeWarning] = useState<string>('');
   const [newDescription, setNewDescription] = useState('');
   
-  // Persistent avatar upload in localStorage
-  const [profileImage, setProfileImage] = useState<string>(() => {
-    return localStorage.getItem('vasanthan_profile_img') || DEFAULT_AVATAR_SVG;
-  });
+  // Fixed profile image (not changeable)
+  const profileImage = PROFILE_IMAGE_PATH;
 
   // Admin lock states for owner-only uploader
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
@@ -374,25 +372,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 3. Real-time Profile Avatar synchronization listener hook
-  useEffect(() => {
-    const unsubscribe = onSnapshot(doc(db, 'profile', 'main'), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.image) {
-          const localPic = localStorage.getItem('vasanthan_profile_img');
-          const isGoogleOwner = auth.currentUser?.email === 'vasanthankasvk@gmail.com';
-          if (isGoogleOwner || !localPic) {
-            setProfileImage(data.image);
-            localStorage.setItem('vasanthan_profile_img', data.image);
-          }
-        }
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'profile/main');
-    });
-    return () => unsubscribe();
-  }, []);
+  // Profile image is now fixed and not synced from Firestore
 
   // Auto-login via URL Query parameters (e.g. ?admin=true or ?admin=vk)
   useEffect(() => {
@@ -428,76 +408,7 @@ export default function App() {
     }
   };
 
-  const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setIsUploading(true);
-      setUploadProgress('Processing profile picture...');
-      try {
-        // High-Quality In-Browser Image Compressor to make it fit directly in Firestore document limits (<1MB)
-        const base64String = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = (event) => {
-            const img = new Image();
-            img.src = event.target?.result as string;
-            img.onload = () => {
-              const canvas = document.createElement('canvas');
-              const maxDim = 400; // 400x400 max dimension for avatar is perfect & super fast
-              let width = img.width;
-              let height = img.height;
-
-              if (width > height) {
-                if (width > maxDim) {
-                  height = Math.round((height * maxDim) / width);
-                  width = maxDim;
-                }
-              } else {
-                if (height > maxDim) {
-                  width = Math.round((width * maxDim) / height);
-                  height = maxDim;
-                }
-              }
-
-              canvas.width = width;
-              canvas.height = height;
-              const ctx = canvas.getContext('2d');
-              if (!ctx) {
-                resolve(event.target?.result as string);
-                return;
-              }
-
-              ctx.drawImage(img, 0, 0, width, height);
-              const dataUrl = canvas.toDataURL('image/jpeg', 0.82); // quality 0.82
-              resolve(dataUrl);
-            };
-            img.onerror = () => reject(new Error('Image load error'));
-          };
-          reader.onerror = () => reject(new Error('File reading error'));
-        });
-
-        setProfileImage(base64String);
-        localStorage.setItem('vasanthan_profile_img', base64String);
-
-        if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
-          setUploadProgress('Saving profile picture to cloud database...');
-          await setDoc(doc(db, 'profile', 'main'), {
-            image: base64String,
-            updatedAt: serverTimestamp()
-          });
-          alert('Profile picture changed and synced globally!');
-        } else {
-          alert('Saved locally. To publish globally for all visitors, open the app in a new tab.');
-        }
-      } catch (err) {
-        console.error(err);
-        alert('Failed to process/upload profile picture: ' + (err instanceof Error ? err.message : String(err)));
-      } finally {
-        setIsUploading(false);
-        setUploadProgress('');
-      }
-    }
-  };
+  // Profile image upload has been permanently disabled — image is fixed
 
   // Studio Monitor Lightbox state
   const [activeLightboxProject, setActiveLightboxProject] = useState<WorkItem | null>(null);
@@ -1304,41 +1215,25 @@ export default function App() {
         <aside id="dashboard-sidebar-left" className="border-r border-[#1a1a1a] p-4 sm:p-6 flex flex-col gap-8 bg-[#030303] lg:sticky lg:top-[80px] lg:h-[calc(100vh-80px)] overflow-y-auto w-full">
                   {/* USER MINI BIO WITH WORK PROFILE IMAGE & ONLINE SINGLE QUOTE  */}
           <div className="flex flex-col gap-4 border-b border-[#1a1a1a] pb-5">
-            <div className="relative w-24 h-24 mx-auto mb-1 group cursor-pointer">
+            <div className="relative w-24 h-24 mx-auto mb-1">
               {/* Luminous aura shadow border */}
               <div className="absolute inset-x-0 -top-1 -bottom-1 rounded-full bg-gradient-to-tr from-[#00ff00]/30 via-emerald-800/10 to-transparent blur-md animate-pulse pointer-events-none" />
               
               <div 
-                className="w-24 h-24 rounded-full border-2 border-[#00ff00] overflow-hidden bg-zinc-900 relative z-10 cursor-pointer"
-                onClick={() => {
-                  const input = document.getElementById('profile-image-upload-input');
-                  if (input) input.click();
-                }}
+                className="w-24 h-24 rounded-full border-2 border-[#00ff00] overflow-hidden bg-zinc-900 relative z-10"
               >
                 <img 
                   src={profileImage} 
                   alt="Vasanthan K Profile Portrait" 
-                  className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
+                  className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
                 />
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity duration-300 z-20">
-                  <span className="text-[8px] text-[#00ff00] font-mono tracking-widest font-bold">CLICK TO</span>
-                  <span className="text-[8px] text-white font-mono tracking-widest font-bold">UPLOAD IMAGE</span>
-                </div>
               </div>
 
               {/* Status indicator pill in right bottom corners */}
               <div className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-black border-2 border-[#00ff00] flex items-center justify-center z-20">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] animate-ping" />
               </div>
-
-              <input 
-                type="file" 
-                id="profile-image-upload-input" 
-                className="hidden" 
-                accept="image/*" 
-                onChange={handleProfileImageUpload}
-              />
             </div>
 
             {isAdmin && (
@@ -1375,40 +1270,6 @@ export default function App() {
                       </button>
                     </div>
                   )}
-
-                  <p className="text-[7.5px] text-zinc-500 leading-tight border-t border-[#111] pt-1.5 mt-1">
-                    Upload your picture, copy the system code, and paste/send it to make it permanent for all visitors!
-                  </p>
-                  
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(profileImage);
-                      alert("Unified Base64 Profile Code Copied! Send this to me via chat so I can embed it globally in App.tsx for your next publish.");
-                    }}
-                    className="mt-1 w-full py-0.5 bg-[#00ff00]/10 border border-[#00ff00]/20 hover:bg-[#00ff00] hover:text-black transition-all rounded text-[7.5px] font-mono uppercase font-black cursor-pointer"
-                  >
-                    Copy Global Code
-                  </button>
-                  <button
-                    onClick={async () => {
-                      localStorage.removeItem('vasanthan_profile_img');
-                      setProfileImage(DEFAULT_AVATAR_SVG);
-                      if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
-                        try {
-                          await setDoc(doc(db, 'profile', 'main'), {
-                            image: DEFAULT_AVATAR_SVG,
-                            updatedAt: serverTimestamp()
-                          });
-                        } catch (err) {
-                           handleFirestoreError(err, OperationType.WRITE, 'profile/main');
-                        }
-                      }
-                      alert("Local profile image override cleared. Restored to system default!");
-                    }}
-                    className="mt-1 w-full py-0.5 bg-red-950/30 border border-red-900/40 hover:bg-red-600 hover:text-white transition-all rounded text-[7.5px] font-mono uppercase font-black cursor-pointer"
-                  >
-                    Reset Local Override
-                  </button>
                 </div>
               </div>
             )}
