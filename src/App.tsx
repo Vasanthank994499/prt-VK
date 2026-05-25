@@ -431,40 +431,70 @@ export default function App() {
   const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Optimistic local preview setup
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
+      setIsUploading(true);
+      setUploadProgress('Processing profile picture...');
+      try {
+        // High-Quality In-Browser Image Compressor to make it fit directly in Firestore document limits (<1MB)
+        const base64String = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const maxDim = 400; // 400x400 max dimension for avatar is perfect & super fast
+              let width = img.width;
+              let height = img.height;
+
+              if (width > height) {
+                if (width > maxDim) {
+                  height = Math.round((height * maxDim) / width);
+                  width = maxDim;
+                }
+              } else {
+                if (height > maxDim) {
+                  width = Math.round((width * maxDim) / height);
+                  height = maxDim;
+                }
+              }
+
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              if (!ctx) {
+                resolve(event.target?.result as string);
+                return;
+              }
+
+              ctx.drawImage(img, 0, 0, width, height);
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.82); // quality 0.82
+              resolve(dataUrl);
+            };
+            img.onerror = () => reject(new Error('Image load error'));
+          };
+          reader.onerror = () => reject(new Error('File reading error'));
+        });
+
         setProfileImage(base64String);
         localStorage.setItem('vasanthan_profile_img', base64String);
-      };
-      reader.readAsDataURL(file);
 
-      // Save globally via Firebase Storage if authenticated
-      if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
-        setIsUploading(true);
-        setUploadProgress('Uploading Profile Picture to Firebase Storage...');
-        try {
-          const profileStorageRef = ref(storage, `profile/avatar_${Date.now()}`);
-          const uploadSnapshot = await uploadBytes(profileStorageRef, file);
-          const downloadUrl = await getDownloadURL(uploadSnapshot.ref);
-
+        if (auth.currentUser && auth.currentUser.email === 'vasanthankasvk@gmail.com') {
+          setUploadProgress('Saving profile picture to cloud database...');
           await setDoc(doc(db, 'profile', 'main'), {
-            image: downloadUrl,
+            image: base64String,
             updatedAt: serverTimestamp()
           });
-          setProfileImage(downloadUrl);
-          localStorage.setItem('vasanthan_profile_img', downloadUrl);
-          alert('Profile picture uploaded successfully and synced globally!');
-        } catch (err) {
-          console.error(err);
-          alert('Failed to upload profile picture to cloud: ' + (err instanceof Error ? err.message : String(err)));
-        } finally {
-          setIsUploading(false);
-          setUploadProgress('');
+          alert('Profile picture changed and synced globally!');
+        } else {
+          alert('Saved locally. To publish globally for all visitors, open the app in a new tab.');
         }
-      } else {
-        alert('Saved locally. To publish globally for all visitors, please sign in with Google in the owner workspace!');
+      } catch (err) {
+        console.error(err);
+        alert('Failed to process/upload profile picture: ' + (err instanceof Error ? err.message : String(err)));
+      } finally {
+        setIsUploading(false);
+        setUploadProgress('');
       }
     }
   };
@@ -1274,31 +1304,27 @@ export default function App() {
         <aside id="dashboard-sidebar-left" className="border-r border-[#1a1a1a] p-4 sm:p-6 flex flex-col gap-8 bg-[#030303] lg:sticky lg:top-[80px] lg:h-[calc(100vh-80px)] overflow-y-auto w-full">
                   {/* USER MINI BIO WITH WORK PROFILE IMAGE & ONLINE SINGLE QUOTE  */}
           <div className="flex flex-col gap-4 border-b border-[#1a1a1a] pb-5">
-            <div className={`relative w-24 h-24 mx-auto mb-1 group ${isAdmin ? 'cursor-pointer' : 'cursor-default'}`}>
+            <div className="relative w-24 h-24 mx-auto mb-1 group cursor-pointer">
               {/* Luminous aura shadow border */}
               <div className="absolute inset-x-0 -top-1 -bottom-1 rounded-full bg-gradient-to-tr from-[#00ff00]/30 via-emerald-800/10 to-transparent blur-md animate-pulse pointer-events-none" />
               
               <div 
-                className={`w-24 h-24 rounded-full border-2 border-[#00ff00] overflow-hidden bg-zinc-900 relative z-10 ${isAdmin ? 'cursor-pointer' : 'cursor-default'}`}
+                className="w-24 h-24 rounded-full border-2 border-[#00ff00] overflow-hidden bg-zinc-900 relative z-10 cursor-pointer"
                 onClick={() => {
-                  if (isAdmin) {
-                    const input = document.getElementById('profile-image-upload-input');
-                    if (input) input.click();
-                  }
+                  const input = document.getElementById('profile-image-upload-input');
+                  if (input) input.click();
                 }}
               >
                 <img 
                   src={profileImage} 
                   alt="Vasanthan K Profile Portrait" 
-                  className={`w-full h-full object-cover transition-all duration-500 ${isAdmin ? 'group-hover:scale-105' : ''}`}
+                  className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
                   referrerPolicy="no-referrer"
                 />
-                {isAdmin && (
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity duration-300 z-20">
-                    <span className="text-[8px] text-[#00ff00] font-mono tracking-widest font-bold">CLICK TO</span>
-                    <span className="text-[8px] text-white font-mono tracking-widest font-bold">UPLOAD IMAGE</span>
-                  </div>
-                )}
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity duration-300 z-20">
+                  <span className="text-[8px] text-[#00ff00] font-mono tracking-widest font-bold">CLICK TO</span>
+                  <span className="text-[8px] text-white font-mono tracking-widest font-bold">UPLOAD IMAGE</span>
+                </div>
               </div>
 
               {/* Status indicator pill in right bottom corners */}
