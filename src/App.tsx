@@ -800,7 +800,7 @@ export default function App() {
             onClick={(e) => handleNavClick('dashboard', e)}
             className={`text-xs font-mono tracking-widest uppercase transition-colors outline-none cursor-pointer ${activeNav === 'dashboard' ? 'text-[#00ff00] font-bold' : 'text-zinc-400 hover:text-white'}`}
           >
-            dashboard
+            DASHBOARD
           </button>
           
           <span className="text-zinc-800 font-light">|</span>
@@ -809,7 +809,7 @@ export default function App() {
             onClick={(e) => handleNavClick('works', e)}
             className={`text-xs font-mono tracking-widest uppercase transition-colors outline-none cursor-pointer ${activeNav === 'works' ? 'text-[#00ff00] font-bold' : 'text-zinc-400 hover:text-white'}`}
           >
-            works
+            WORKS
           </button>
           
           <span className="text-zinc-800 font-light">|</span>
@@ -818,7 +818,7 @@ export default function App() {
             onClick={(e) => handleNavClick('skill', e)}
             className={`text-xs font-mono tracking-widest uppercase transition-colors outline-none cursor-pointer ${activeNav === 'skill' ? 'text-[#00ff00] font-bold' : 'text-zinc-400 hover:text-white'}`}
           >
-            skill
+            SKILLS
           </button>
           
           <span className="text-zinc-800 font-light">|</span>
@@ -827,7 +827,7 @@ export default function App() {
             onClick={(e) => handleNavClick('about', e)}
             className={`text-xs font-mono tracking-widest uppercase transition-colors outline-none cursor-pointer ${activeNav === 'about' ? 'text-[#00ff00] font-bold' : 'text-zinc-400 hover:text-white'}`}
           >
-            about
+            ABOUT
           </button>
           
           <span className="text-zinc-800 font-light">|</span>
@@ -858,27 +858,35 @@ export default function App() {
           <div className="flex flex-col gap-3">
             <button 
               onClick={(e) => handleNavClick('dashboard', e)}
-              className="text-left text-xs font-mono text-[#00ff00] py-2 border-b border-[#111]"
+              className={`text-left text-xs font-mono py-2 border-b border-[#111] uppercase tracking-wider transition-colors cursor-pointer ${
+                activeNav === 'dashboard' ? 'text-[#00ff00] font-bold' : 'text-zinc-400 hover:text-white'
+              }`}
             >
-              dashboard
+              DASHBOARD
             </button>
             <button 
               onClick={(e) => handleNavClick('works', e)}
-              className="text-left text-xs font-mono text-gray-300 hover:text-white py-2 border-b border-[#111]"
+              className={`text-left text-xs font-mono py-2 border-b border-[#111] uppercase tracking-wider transition-colors cursor-pointer ${
+                activeNav === 'works' ? 'text-[#00ff00] font-bold' : 'text-zinc-400 hover:text-white'
+              }`}
             >
-              works
+              WORKS
             </button>
             <button 
               onClick={(e) => handleNavClick('skill', e)}
-              className="text-left text-xs font-mono text-gray-300 hover:text-white py-2 border-b border-[#111]"
+              className={`text-left text-xs font-mono py-2 border-b border-[#111] uppercase tracking-wider transition-colors cursor-pointer ${
+                activeNav === 'skill' ? 'text-[#00ff00] font-bold' : 'text-zinc-400 hover:text-white'
+              }`}
             >
-              skill
+              SKILLS
             </button>
             <button 
               onClick={(e) => handleNavClick('about', e)}
-              className="text-left text-xs font-mono text-gray-300 hover:text-white py-2"
+              className={`text-left text-xs font-mono py-2 uppercase tracking-wider transition-colors cursor-pointer ${
+                activeNav === 'about' ? 'text-[#00ff00] font-bold' : 'text-zinc-400 hover:text-white'
+              }`}
             >
-              about
+              ABOUT
             </button>
           </div>
           <div className="flex gap-2 mt-2">
@@ -967,6 +975,16 @@ export default function App() {
                     className="mt-1 w-full py-0.5 bg-[#00ff00]/10 border border-[#00ff00]/20 hover:bg-[#00ff00] hover:text-black transition-all rounded text-[7.5px] font-mono uppercase font-black cursor-pointer"
                   >
                     Copy Global Code
+                  </button>
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem('vasanthan_profile_img');
+                      setProfileImage(DEFAULT_AVATAR_SVG);
+                      alert("Local profile image override cleared. Restored to system default!");
+                    }}
+                    className="mt-1 w-full py-0.5 bg-red-950/30 border border-red-900/40 hover:bg-red-600 hover:text-white transition-all rounded text-[7.5px] font-mono uppercase font-black cursor-pointer"
+                  >
+                    Reset Local Override
                   </button>
                 </div>
               </div>
