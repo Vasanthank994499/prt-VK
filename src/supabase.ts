@@ -120,3 +120,4 @@ try {
 }
 
 export const supabase = supabaseClient;
+export const hasSupabaseConfig = isValidConfig;

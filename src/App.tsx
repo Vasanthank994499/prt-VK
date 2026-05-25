@@ -24,7 +24,7 @@ import {
   Github
 } from 'lucide-react';
 
-import { supabase } from './supabase';
+import { supabase, hasSupabaseConfig } from './supabase';
 
 
 // Custom interface for Work items
@@ -2560,6 +2560,57 @@ export default function App() {
                   Hint: Check URL options <code className="text-[#00ff00] bg-black px-1 py-0.5 rounded">?admin=true</code> to persist owner login.
                 </div>
               </form>
+            ) : !hasSupabaseConfig ? (
+              <div className="p-5 flex flex-col gap-3">
+                <div className="border border-red-500/20 bg-red-950/20 p-3 rounded-lg text-center flex flex-col gap-2">
+                  <div className="text-[10px] text-red-500 font-mono font-extrabold uppercase tracking-wider">
+                    ⚠️ Supabase Config Missing
+                  </div>
+                  <div className="text-[8px] text-zinc-400 font-mono leading-normal text-left">
+                    Live Supabase database and GitHub login are not configured. To fix this:
+                  </div>
+                  <div className="text-[8.5px] text-zinc-300 font-mono text-left space-y-1.5 list-decimal pl-3.5 leading-normal">
+                    <div>1. Go to <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-[#00ff00] underline">supabase.com</a> and copy your project URL and anon public API key.</div>
+                    <div>2. Go to your <span className="text-[#00ff00] font-bold">Vercel Project Settings</span> &rarr; <span className="font-bold">Environment Variables</span>.</div>
+                    <div>3. Add these two variables:
+                      <div className="mt-1 font-bold text-white bg-black/60 px-1.5 py-0.5 rounded text-[7.5px] border border-[#222]">VITE_SUPABASE_URL</div>
+                      <div className="mt-0.5 font-bold text-white bg-black/60 px-1.5 py-0.5 rounded text-[7.5px] border border-[#222]">VITE_SUPABASE_ANON_KEY</div>
+                    </div>
+                    <div>4. Redeploy your project or push a new commit to apply.</div>
+                  </div>
+                </div>
+
+                <div className="text-[8.5px] text-zinc-500 font-mono text-center leading-normal">
+                  You can still test all admin uploading features offline using the local demo mode:
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdmin(true);
+                    localStorage.setItem('is_admin_v2', 'true');
+                    setIsAdminAuthOpen(false);
+                  }}
+                  className="w-full py-2 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[9px] rounded flex items-center justify-center gap-1.5 transition-transform active:scale-98 cursor-pointer uppercase"
+                >
+                  <Unlock className="w-3.5 h-3.5" />
+                  Enable Offline Demo Admin
+                </button>
+
+                <div className="flex gap-2 pt-1 border-t border-[#1a1a1a] mt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAdminAuthOpen(false);
+                      setAuthPassword('');
+                      setCloudAuthError('');
+                    }}
+                    className="w-full py-1 bg-zinc-950 hover:bg-zinc-900 border border-[#222] text-zinc-400 font-mono text-[9px] rounded transition-colors cursor-pointer uppercase"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="p-5 flex flex-col gap-4">
                 <div className="text-[10px] text-zinc-500 font-mono text-center tracking-wide uppercase leading-normal">
