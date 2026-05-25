@@ -736,12 +736,12 @@ export default function App() {
         setUploadProgress(`Uploading video file "${newVideoFile.name}" to Cloud Storage...`);
         const filePath = `videos/${customId}_${newVideoFile.name}`;
         const { data: uploadData, error: uploadErr } = await supabase.storage
-          .from('works')
+          .from('vkportfolio')
           .upload(filePath, newVideoFile);
         if (uploadErr) throw uploadErr;
 
         const { data: urlData } = supabase.storage
-          .from('works')
+          .from('vkportfolio')
           .getPublicUrl(filePath);
         finalVideoUrl = urlData.publicUrl;
       } else if (newVideoUrl.trim()) {
@@ -755,12 +755,12 @@ export default function App() {
         setUploadProgress(`Uploading cover thumbnail file "${newThumbnailFile.name}" to Cloud Storage...`);
         const filePath = `thumbnails/${customId}_${newThumbnailFile.name}`;
         const { data: uploadData, error: uploadErr } = await supabase.storage
-          .from('works')
+          .from('vkportfolio')
           .upload(filePath, newThumbnailFile);
         if (uploadErr) throw uploadErr;
 
         const { data: urlData } = supabase.storage
-          .from('works')
+          .from('vkportfolio')
           .getPublicUrl(filePath);
         finalThumbnailUrl = urlData.publicUrl;
       } else if (newThumbnailUrl.trim()) {
@@ -813,9 +813,9 @@ export default function App() {
         userFriendlyMsg = 'Failed to fetch (Network Error).\n\n' +
           'This is usually caused by one of the following:\n' +
           '1. INVALID API URL: Make sure the URL in settings is your Supabase Project API URL (e.g., ending in .supabase.co), NOT the dashboard URL.\n' +
-          '2. MISSING STORAGE BUCKET: Check your Supabase Dashboard > Storage. You must create a bucket named exactly "works" (all lowercase).\n' +
-          '3. BUCKET NOT PUBLIC: Go to Storage > Bucket Settings on Supabase and make sure the "works" bucket is set to "Public" (enabled).\n' +
-          '4. RLS UPLOAD POLICY MISSING: You need an RLS policy on the "works" storage bucket to allow uploads. Go to Storage > Policies, click New Policy under "works" bucket, and select "Get started quickly" > "Allow public uploads" or "Enable read/write access for all users".';
+          '2. MISSING STORAGE BUCKET: Check your Supabase Dashboard > Storage. You must create a bucket named exactly "vkportfolio" (all lowercase).\n' +
+          '3. BUCKET NOT PUBLIC: Go to Storage > Bucket Settings on Supabase and make sure the "vkportfolio" bucket is set to "Public" (enabled).\n' +
+          '4. RLS UPLOAD POLICY MISSING: You need an RLS policy on the "vkportfolio" storage bucket to allow uploads. Go to Storage > Policies, click New Policy under "vkportfolio" bucket, and select "Get started quickly" > "Allow public uploads" or "Enable read/write access for all users".';
       }
       alert('Error uploading or creating work item: ' + userFriendlyMsg);
     } finally {
