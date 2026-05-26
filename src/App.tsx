@@ -256,6 +256,14 @@ const getYoutubeId = (url: string): string | null => {
   return (match && match[2].length === 11) ? match[2] : null;
 };
 
+// Helper to extract Google Drive file ID
+const getGoogleDriveId = (url: string): string | null => {
+  if (!url) return null;
+  const regExp = /(?:drive\.google\.com\/(?:file\/d\/|open\?id=)|docs\.google\.com\/(?:file\/d\/|open\?id=))([a-zA-Z0-9_-]{25,})/;
+  const match = url.match(regExp);
+  return match ? match[1] : null;
+};
+
 // Fixed profile image — permanently set, not changeable
 const PROFILE_IMAGE_PATH = '/profile.png';
 
@@ -2233,6 +2241,7 @@ export default function App() {
                 
                 {(() => {
                   const youtubeId = getYoutubeId(activeLightboxProject.videoUrl || '');
+                  const driveId = getGoogleDriveId(activeLightboxProject.videoUrl || '');
                   if (youtubeId) {
                     return (
                       <iframe
@@ -2241,6 +2250,19 @@ export default function App() {
                         title="YouTube video player"
                         frameBorder="0"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                        className="w-full h-full min-h-[280px] sm:min-h-[400px] lg:min-h-[450px]"
+                        style={{ filter: getFilterStyle() }}
+                      />
+                    );
+                  }
+                  if (driveId) {
+                    return (
+                      <iframe
+                        src={`https://drive.google.com/file/d/${driveId}/preview`}
+                        title="Google Drive video player"
+                        frameBorder="0"
+                        allow="autoplay; encrypted-media"
                         allowFullScreen
                         className="w-full h-full min-h-[280px] sm:min-h-[400px] lg:min-h-[450px]"
                         style={{ filter: getFilterStyle() }}
