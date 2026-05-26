@@ -40,6 +40,7 @@ interface WorkItem {
   softwareUsed?: string[];
   description?: string;
   fps?: string;
+  createdAt?: string;
 }
 
 // Initial state values matching Vasanthan K's portfolio
@@ -1063,11 +1064,22 @@ export default function App() {
         .filter(s => s.length > 0);
       const finalSoftware = [...editSoftwareUsed, ...customSofts];
 
-      // 3. Update work item in Supabase Database
+      // 3. Update work item in Supabase Database by deleting then inserting (to bypass RLS update constraints)
       setUploadProgress('Saving updates to database...');
+      
+      // Delete old row
+      const { error: deleteErr } = await supabase
+        .from('works')
+        .delete()
+        .eq('id', editingProject.id);
+        
+      if (deleteErr) throw deleteErr;
+
+      // Insert updated row (preserving original createdAt timestamp to maintain grid sorting)
       const { error: dbErr } = await supabase
         .from('works')
-        .update({
+        .insert([{
+          id: editingProject.id,
           title: editTitle.toUpperCase(),
           category: editCategory,
           type: editType,
@@ -1076,9 +1088,9 @@ export default function App() {
           fps: editFps.trim(),
           description: editDescription.trim(),
           duration: editDuration.trim() || '0:30',
-          software_used: finalSoftware
-        })
-        .eq('id', editingProject.id);
+          software_used: finalSoftware,
+          created_at: editingProject.createdAt || new Date().toISOString()
+        }]);
 
       if (dbErr) throw dbErr;
 
