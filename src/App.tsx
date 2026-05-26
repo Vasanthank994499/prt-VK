@@ -419,8 +419,18 @@ export default function App() {
       )
       .subscribe();
 
+    // Disable right click on images and videos globally to prevent unauthorized downloads
+    const preventContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'IMG' || target.tagName === 'VIDEO')) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener('contextmenu', preventContextMenu);
+
     return () => {
       supabase.removeChannel(worksChannel);
+      document.removeEventListener('contextmenu', preventContextMenu);
     };
   }, []);
 
@@ -1308,7 +1318,10 @@ export default function App() {
                 <img 
                   src={profileImage} 
                   alt="Vasanthan K Profile Portrait" 
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover select-none pointer-events-none"
+                  draggable={false}
+                  onContextMenu={(e) => e.preventDefault()}
+                  style={{ pointerEvents: 'none', userSelect: 'none', WebkitUserDrag: 'none', WebkitTouchCallout: 'none' }}
                   referrerPolicy="no-referrer"
                 />
               </div>
@@ -1677,7 +1690,10 @@ export default function App() {
                       <img 
                         src={item.thumbnailUrl} 
                         alt={item.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102 opacity-40 group-hover:opacity-60"
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102 opacity-40 group-hover:opacity-60 select-none pointer-events-none"
+                        draggable={false}
+                        onContextMenu={(e) => e.preventDefault()}
+                        style={{ pointerEvents: 'none', userSelect: 'none', WebkitUserDrag: 'none', WebkitTouchCallout: 'none' }}
                         referrerPolicy="no-referrer"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-black/10 z-10" />
@@ -2034,8 +2050,17 @@ export default function App() {
                   loop
                   muted={isMuted}
                   autoPlay={isPlaying}
-                  className="max-h-[380px] sm:max-h-[460px] w-full object-contain transition-all duration-300"
-                  style={{ filter: getFilterStyle() }}
+                  controlsList="nodownload"
+                  disablePictureInPicture
+                  draggable={false}
+                  onContextMenu={(e) => e.preventDefault()}
+                  className="max-h-[380px] sm:max-h-[460px] w-full object-contain transition-all duration-300 select-none"
+                  style={{ 
+                    filter: getFilterStyle(),
+                    userSelect: 'none',
+                    WebkitUserDrag: 'none',
+                    WebkitTouchCallout: 'none'
+                  }}
                 />
 
                 <div className="absolute top-4 left-4 text-[9px] font-mono text-white/20 bg-black/30 px-2 py-0.5 rounded backdrop-blur-sm pointer-events-none">
