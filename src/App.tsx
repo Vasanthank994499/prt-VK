@@ -1130,8 +1130,6 @@ export default function App() {
           >
             <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#00ff00] animate-pulse' : 'bg-red-500'}`} />
             <span>TECH FRAME</span>
-            <span className={isOnline ? 'text-zinc-805' : 'text-red-950'}>|</span>
-            <span>{isOnline ? 'ACTIVE' : 'DISABLED'}</span>
           </button>
         </div>
 
