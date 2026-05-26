@@ -267,6 +267,15 @@ const getGoogleDriveId = (url: string): string | null => {
 // Fixed profile image — permanently set, not changeable
 const PROFILE_IMAGE_PATH = '/profile.png';
 
+const PRESET_CATEGORIES = [
+  'Social Motion Design',
+  'Commercial Production',
+  'Studio Motion',
+  'Professional Color Grading',
+  'Advanced Visual Effects',
+  'Creative Graphic Design'
+];
+
 export default function App() {
   const [works, setWorks] = useState<WorkItem[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'landscape' | 'vertical' | 'normal'>('all');
@@ -278,6 +287,7 @@ export default function App() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState('Social Motion Design');
+  const [newCustomCategory, setNewCustomCategory] = useState('');
   const [newType, setNewType] = useState<'vertical' | 'landscape' | 'normal'>('normal');
   const [newVideoUrl, setNewVideoUrl] = useState('');
   const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
@@ -297,6 +307,7 @@ export default function App() {
   const [editingProject, setEditingProject] = useState<WorkItem | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editCategory, setEditCategory] = useState('');
+  const [editCustomCategory, setEditCustomCategory] = useState('');
   const [editType, setEditType] = useState<'vertical' | 'landscape' | 'normal'>('normal');
   const [editVideoUrl, setEditVideoUrl] = useState('');
   const [editVideoFile, setEditVideoFile] = useState<File | null>(null);
@@ -927,10 +938,18 @@ export default function App() {
 
       // 3. Save work item to Supabase Database (globally visible to all visitors)
       setUploadProgress('Saving work item to global database...');
+      const categoryToSend = newCategory === 'custom' ? newCustomCategory.trim() : newCategory;
+      if (newCategory === 'custom' && !newCustomCategory.trim()) {
+        alert('Please specify a custom category name.');
+        setIsUploading(false);
+        setUploadProgress('');
+        return;
+      }
+
       const customNewItem: any = {
         id: customId,
         title: newTitle.toUpperCase(),
-        category: newCategory,
+        category: categoryToSend,
         type: newType,
         video_url: finalVideoUrl,
         thumbnail_url: finalThumbnailUrl,
@@ -950,6 +969,7 @@ export default function App() {
       // Clear state and input file references
       setNewTitle('');
       setNewCategory('Social Motion Design');
+      setNewCustomCategory('');
       setNewType('normal');
       setNewVideoUrl('');
       setNewVideoFile(null);
@@ -1002,7 +1022,13 @@ export default function App() {
     if (!isAdmin) return;
     setEditingProject(item);
     setEditTitle(item.title);
-    setEditCategory(item.category);
+    if (PRESET_CATEGORIES.includes(item.category)) {
+      setEditCategory(item.category);
+      setEditCustomCategory('');
+    } else {
+      setEditCategory('custom');
+      setEditCustomCategory(item.category || '');
+    }
     setEditType(item.type);
     setEditVideoUrl(item.videoUrl || '');
     setEditVideoFile(null);
@@ -1077,6 +1103,14 @@ export default function App() {
       // 3. Update work item in Supabase Database by deleting then inserting (to bypass RLS update constraints)
       setUploadProgress('Saving updates to database...');
       
+      const categoryToSave = editCategory === 'custom' ? editCustomCategory.trim() : editCategory;
+      if (editCategory === 'custom' && !editCustomCategory.trim()) {
+        alert('Please specify a custom category name.');
+        setIsUploading(false);
+        setUploadProgress('');
+        return;
+      }
+
       // Delete old row
       const { error: deleteErr } = await supabase
         .from('works')
@@ -1091,7 +1125,7 @@ export default function App() {
         .insert([{
           id: editingProject.id,
           title: editTitle.toUpperCase(),
-          category: editCategory,
+          category: categoryToSave,
           type: editType,
           video_url: finalVideoUrl,
           thumbnail_url: finalThumbnailUrl,
@@ -2546,7 +2580,7 @@ export default function App() {
                   <select
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value)}
-                    className="bg-black border border-[#1a1a1a] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono cursor-pointer"
+                    className="bg-black border border-[#1a1a1a] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono cursor-pointer w-full"
                   >
                     <option value="Social Motion Design">Social Motion Design (9:16)</option>
                     <option value="Commercial Production">Commercial Production (16:9)</option>
@@ -2554,7 +2588,18 @@ export default function App() {
                     <option value="Professional Color Grading">Professional Color Grading</option>
                     <option value="Advanced Visual Effects">Advanced Visual Effects</option>
                     <option value="Creative Graphic Design">Creative Graphic Design</option>
+                    <option value="custom">Other / Custom Category...</option>
                   </select>
+                  {newCategory === 'custom' && (
+                    <input
+                      type="text"
+                      required
+                      placeholder="ENTER CUSTOM SERVICE CATEGORY"
+                      value={newCustomCategory}
+                      onChange={(e) => setNewCustomCategory(e.target.value)}
+                      className="bg-black border border-[#1a1a1a] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono mt-1.5 uppercase tracking-wider w-full"
+                    />
+                  )}
                 </div>
 
               </div>
@@ -2907,7 +2952,7 @@ export default function App() {
                   <select
                     value={editCategory}
                     onChange={(e) => setEditCategory(e.target.value)}
-                    className="bg-black border border-[#1a1a1a] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono cursor-pointer"
+                    className="bg-black border border-[#1a1a1a] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono cursor-pointer w-full"
                   >
                     <option value="Social Motion Design">Social Motion Design (9:16)</option>
                     <option value="Commercial Production">Commercial Production (16:9)</option>
@@ -2915,7 +2960,18 @@ export default function App() {
                     <option value="Professional Color Grading">Professional Color Grading</option>
                     <option value="Advanced Visual Effects">Advanced Visual Effects</option>
                     <option value="Creative Graphic Design">Creative Graphic Design</option>
+                    <option value="custom">Other / Custom Category...</option>
                   </select>
+                  {editCategory === 'custom' && (
+                    <input
+                      type="text"
+                      required
+                      placeholder="ENTER CUSTOM SERVICE CATEGORY"
+                      value={editCustomCategory}
+                      onChange={(e) => setEditCustomCategory(e.target.value)}
+                      className="bg-black border border-[#1a1a1a] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono mt-1.5 uppercase tracking-wider w-full"
+                    />
+                  )}
                 </div>
 
               </div>
