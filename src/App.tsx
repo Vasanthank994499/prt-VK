@@ -21,7 +21,8 @@ import {
   Layers,
   Palette,
   Sparkles,
-  Github
+  Github,
+  Edit
 } from 'lucide-react';
 
 import { supabase, hasSupabaseConfig, updateSupabaseCredentials, clearSupabaseCredentials } from './supabase';
@@ -271,6 +272,19 @@ export default function App() {
   const [thumbnailSizeWarning, setThumbnailSizeWarning] = useState<string>('');
   const [newDescription, setNewDescription] = useState('');
   const [newFps, setNewFps] = useState('');
+
+  // Edit modal states
+  const [editingProject, setEditingProject] = useState<WorkItem | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editType, setEditType] = useState<'vertical' | 'landscape' | 'normal'>('normal');
+  const [editVideoUrl, setEditVideoUrl] = useState('');
+  const [editVideoFile, setEditVideoFile] = useState<File | null>(null);
+  const [editThumbnailUrl, setEditThumbnailUrl] = useState('');
+  const [editThumbnailFile, setEditThumbnailFile] = useState<File | null>(null);
+  const [editFps, setEditFps] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+
   const [isOnline, setIsOnline] = useState<boolean>(() => {
     const local = localStorage.getItem('profile_is_online');
     return local !== null ? local === 'true' : true;
@@ -920,6 +934,103 @@ export default function App() {
           '6. Click "Save" and try uploading your video again.';
       }
       alert('Error uploading or creating work item: ' + userFriendlyMsg);
+    } finally {
+      setIsUploading(false);
+      setUploadProgress('');
+    }
+  };
+
+  const handleOpenEditModal = (item: WorkItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isAdmin) return;
+    setEditingProject(item);
+    setEditTitle(item.title);
+    setEditCategory(item.category);
+    setEditType(item.type);
+    setEditVideoUrl(item.videoUrl || '');
+    setEditVideoFile(null);
+    setEditThumbnailUrl(item.thumbnailUrl || '');
+    setEditThumbnailFile(null);
+    setEditFps(item.fps || '');
+    setEditDescription(item.description || '');
+  };
+
+  const handleUpdateWorkItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProject) return;
+
+    setIsUploading(true);
+    setUploadProgress('Preparing update channels...');
+
+    let finalVideoUrl = editVideoUrl;
+    let finalThumbnailUrl = editThumbnailUrl;
+
+    try {
+      if (!isAdmin) {
+        setIsUploading(false);
+        setUploadProgress('');
+        setIsAdminAuthOpen(true);
+        return;
+      }
+
+      // 1. Upload Video file if a new file is selected
+      if (editVideoFile) {
+        setUploadProgress(`Uploading new video file "${editVideoFile.name}" to Cloud Storage...`);
+        const filePath = `videos/${editingProject.id}_${editVideoFile.name}`;
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('vkportfolio')
+          .upload(filePath, editVideoFile, { upsert: true });
+        if (uploadErr) throw uploadErr;
+
+        const { data: urlData } = supabase.storage
+          .from('vkportfolio')
+          .getPublicUrl(filePath);
+        finalVideoUrl = urlData.publicUrl;
+      }
+
+      // 2. Upload Thumbnail file if a new file is selected
+      if (editThumbnailFile) {
+        setUploadProgress(`Uploading new cover thumbnail file "${editThumbnailFile.name}" to Cloud Storage...`);
+        const filePath = `thumbnails/${editingProject.id}_${editThumbnailFile.name}`;
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('vkportfolio')
+          .upload(filePath, editThumbnailFile, { upsert: true });
+        if (uploadErr) throw uploadErr;
+
+        const { data: urlData } = supabase.storage
+          .from('vkportfolio')
+          .getPublicUrl(filePath);
+        finalThumbnailUrl = urlData.publicUrl;
+      }
+
+      // 3. Update work item in Supabase Database
+      setUploadProgress('Saving updates to database...');
+      const { error: dbErr } = await supabase
+        .from('works')
+        .update({
+          title: editTitle.toUpperCase(),
+          category: editCategory,
+          type: editType,
+          video_url: finalVideoUrl,
+          thumbnail_url: finalThumbnailUrl,
+          fps: editFps.trim(),
+          description: editDescription.trim()
+        })
+        .eq('id', editingProject.id);
+
+      if (dbErr) throw dbErr;
+
+      alert('Work item updated successfully!');
+      setEditingProject(null);
+      fetchWorks();
+    } catch (err: any) {
+      console.error(err);
+      let userFriendlyMsg = err?.message || String(err);
+      if (userFriendlyMsg.includes('Failed to fetch')) {
+        userFriendlyMsg = 'Failed to fetch (Network Error).\n\n' +
+          'This is usually caused by database or storage connection issues. Please check your Supabase configuration.';
+      }
+      alert('Error updating work item: ' + userFriendlyMsg);
     } finally {
       setIsUploading(false);
       setUploadProgress('');
@@ -1710,13 +1821,22 @@ export default function App() {
                         </span>
                         
                         {isAdmin && (
-                          <button
-                            onClick={(e) => handleDeleteWorkItem(item.id, e)}
-                            className="p-1 rounded bg-black/80 border border-[#1a1a1a] text-zinc-500 hover:text-red-500 pointer-events-auto transition-colors cursor-pointer"
-                            title="Delete design item"
-                          >
-                            <Trash2 size={10} />
-                          </button>
+                          <div className="flex gap-1.5 pointer-events-auto">
+                            <button
+                              onClick={(e) => handleOpenEditModal(item, e)}
+                              className="p-1 rounded bg-black/80 border border-[#1a1a1a] text-zinc-500 hover:text-[#00ff00] transition-colors cursor-pointer"
+                              title="Edit design item"
+                            >
+                              <Edit size={10} />
+                            </button>
+                            <button
+                              onClick={(e) => handleDeleteWorkItem(item.id, e)}
+                              className="p-1 rounded bg-black/80 border border-[#1a1a1a] text-zinc-500 hover:text-red-500 transition-colors cursor-pointer"
+                              title="Delete design item"
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -2506,6 +2626,218 @@ export default function App() {
         </div>
       )}
 
+      {/* --- EDIT WORKSTATION MODAL --- */}
+      {editingProject && (
+        <div 
+          id="edit-dialog-overlay" 
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm overflow-y-auto animate-fade-in"
+          onClick={() => setEditingProject(null)}
+        >
+          <div 
+            className="w-full max-w-lg bg-[#0a0a0a] border border-[#222] rounded-md overflow-hidden shadow-2xl animate-scale-up"
+            onClick={(e) => e.stopPropagation()} 
+          >
+            
+            <div className="bg-[#111] px-5 py-4 border-b border-[#222] flex justify-between items-center">
+              <div className="flex items-center gap-2 text-white">
+                <Sliders size={16} className="text-[#00ff00]" />
+                <span className="font-extrabold tracking-tight text-xs sm:text-sm font-mono uppercase">
+                  STUDIO DESIGN ADAPTER (EDIT WORKSTATION)
+                </span>
+              </div>
+              <button 
+                onClick={() => setEditingProject(null)}
+                className="p-1 rounded text-zinc-400 hover:text-white cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateWorkItem} className="p-5 flex flex-col gap-4">
+              
+              <div className="text-[10px] text-[#00ff00] font-mono uppercase tracking-[0.2em] leading-normal">
+                | Editing ID: {editingProject.id}
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
+                  Project Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. KINETIC COMMERCIAL SHOWCASE"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="bg-black border border-[#1a1a1a] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00ff00] transition-colors uppercase font-mono tracking-wider"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
+                    Card Grid Layout *
+                  </label>
+                  <select
+                    value={editType}
+                    onChange={(e) => setEditType(e.target.value as 'vertical' | 'landscape' | 'normal')}
+                    className="bg-black border border-[#1a1a1a] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono cursor-pointer"
+                  >
+                    <option value="normal">Normal (Classic square box)</option>
+                    <option value="vertical">Vertical (Double-row span / Reels / Shorts 9:16)</option>
+                    <option value="landscape">Landscape (Double-column span / Showreel 16:9)</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
+                    Service Category *
+                  </label>
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    className="bg-black border border-[#1a1a1a] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono cursor-pointer"
+                  >
+                    <option value="Social Motion Design">Social Motion Design (9:16)</option>
+                    <option value="Commercial Production">Commercial Production (16:9)</option>
+                    <option value="Studio Motion">Studio Motion</option>
+                    <option value="Professional Color Grading">Professional Color Grading</option>
+                    <option value="Advanced Visual Effects">Advanced Visual Effects</option>
+                    <option value="Creative Graphic Design">Creative Graphic Design</option>
+                  </select>
+                </div>
+
+              </div>
+
+              {/* VIDEO RESOURCE CONFIGURATION */}
+              <div className="border border-[#1a1a1a] bg-[#050505] p-3 rounded flex flex-col gap-3">
+                <span className="text-[9px] font-mono font-bold text-[#00ff00] uppercase tracking-wider">
+                  🎥 VIDEO CHANNEL SOURCE
+                </span>
+                
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[9px] text-zinc-500 font-mono">Upload New Video file (Replace):</label>
+                  <input
+                    type="file"
+                    accept="video/*"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) {
+                        setEditVideoFile(e.target.files[0]);
+                      }
+                    }}
+                    className="text-xs text-zinc-400 bg-black border border-[#1a1a1a] rounded p-2 w-full file:bg-zinc-900 file:border-0 file:text-[#00ff00] file:text-[10px] file:font-mono file:rounded file:px-2 file:py-0.5 file:cursor-pointer"
+                  />
+                  {editVideoFile && (
+                    <div className="text-[8px] text-[#00ff00] font-mono">
+                      ✓ Selected new file: {editVideoFile.name} ({(editVideoFile.size / (1024*1024)).toFixed(2)} MB)
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest">Or Edit Direct Video URL</span>
+                  <input
+                    type="text"
+                    placeholder="https://assets.mixkit.co/videos/preview/..."
+                    value={editVideoUrl}
+                    onChange={(e) => {
+                      setEditVideoUrl(e.target.value);
+                      if (e.target.value) setEditVideoFile(null);
+                    }}
+                    className="bg-black border border-[#1a1a1a] rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono placeholder:text-zinc-700"
+                  />
+                </div>
+              </div>
+
+              {/* THUMBNAIL RESOURCE CONFIGURATION */}
+              <div className="border border-[#1a1a1a] bg-[#050505] p-3 rounded flex flex-col gap-3">
+                <span className="text-[9px] font-mono font-bold text-[#00ff00] uppercase tracking-wider">
+                  🖼️ THUMBNAIL STATUS & COVER SOURCE
+                </span>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[9px] text-zinc-500 font-mono">Upload New Cover file (Replace):</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) {
+                        setEditThumbnailFile(e.target.files[0]);
+                      }
+                    }}
+                    className="text-xs text-zinc-400 bg-black border border-[#1a1a1a] rounded p-2 w-full file:bg-zinc-900 file:border-0 file:text-[#00ff00] file:text-[10px] file:font-mono file:rounded file:px-2 file:py-0.5 file:cursor-pointer"
+                  />
+                  {editThumbnailFile && (
+                    <div className="text-[8px] text-[#00ff00] font-mono">
+                      ✓ Selected new cover: {editThumbnailFile.name} ({(editThumbnailFile.size / 1024).toFixed(0)} KB)
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest">Or Edit Direct Thumbnail URL</span>
+                  <input
+                    type="text"
+                    placeholder="https://images.unsplash.com/photo-1492691527719-..."
+                    value={editThumbnailUrl}
+                    onChange={(e) => {
+                      setEditThumbnailUrl(e.target.value);
+                      if (e.target.value) setEditThumbnailFile(null);
+                    }}
+                    className="bg-black border border-[#1a1a1a] rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono placeholder:text-zinc-700"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
+                  Frame Rate (FPS)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 60 FPS, 24 FPS, 23.976"
+                  value={editFps}
+                  onChange={(e) => setEditFps(e.target.value)}
+                  className="bg-black border border-[#1a1a1a] rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono placeholder:text-zinc-700"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
+                  Project Description Details
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Describe key editing cuts, filters, and color transitions..."
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="bg-black border border-[#1a1a1a] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00ff00] font-sans placeholder:text-zinc-700"
+                />
+              </div>
+
+              <div className="flex gap-2.5 justify-end pt-3 border-t border-[#111]">
+                <button
+                  type="button"
+                  onClick={() => setEditingProject(null)}
+                  className="px-4 py-2 bg-transparent text-zinc-400 hover:text-white text-xs font-mono rounded cursor-pointer"
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold text-xs font-mono rounded transition-transform active:scale-95 cursor-pointer"
+                >
+                  SAVE CHANGES
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
       {/* OWNER AUTHENTICATION PASSCODE DIALOG */}
       {isAdminAuthOpen && (
         <div 
@@ -2515,8 +2847,6 @@ export default function App() {
             setIsAdminAuthOpen(false);
             setPasscodeInput('');
             setAuthError('');
-            setAuthPassword('');
-            setCloudAuthError('');
           }}
         >
           <div 
@@ -2535,8 +2865,6 @@ export default function App() {
                   setIsAdminAuthOpen(false);
                   setPasscodeInput('');
                   setAuthError('');
-                  setAuthPassword('');
-                  setCloudAuthError('');
                 }}
                 className="p-1 rounded text-zinc-500 hover:text-white cursor-pointer"
               >
@@ -2684,8 +3012,6 @@ export default function App() {
                     setPasscodeInput('');
                     setAuthError('');
                     setGithubAuthError('');
-                    setAuthPassword('');
-                    setCloudAuthError('');
                   }}
                   className="w-full py-1 bg-zinc-950 hover:bg-zinc-900 border border-[#222] text-zinc-450 font-mono text-[9px] rounded transition-colors cursor-pointer uppercase"
                 >
