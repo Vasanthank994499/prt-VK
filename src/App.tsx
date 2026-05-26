@@ -334,9 +334,16 @@ export default function App() {
     setIsOnline(newStatus);
     localStorage.setItem('profile_is_online', String(newStatus));
     try {
+      // Delete existing status row to bypass RLS update constraints
+      await supabase
+        .from('works')
+        .delete()
+        .eq('id', 'system-online-status');
+
+      // Insert new status row
       const { error } = await supabase
         .from('works')
-        .upsert([{ 
+        .insert([{ 
           id: 'system-online-status', 
           title: 'SYSTEM STATUS', 
           description: newStatus ? 'online' : 'offline',
