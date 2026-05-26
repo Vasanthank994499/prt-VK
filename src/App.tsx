@@ -247,6 +247,14 @@ const renderCategoryIcon = (iconName: string) => {
   }
 };
 
+// Helper to extract YouTube video ID
+const getYoutubeId = (url: string): string | null => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : null;
+};
+
 // Fixed profile image — permanently set, not changeable
 const PROFILE_IMAGE_PATH = '/profile.png';
 
@@ -272,6 +280,9 @@ export default function App() {
   const [thumbnailSizeWarning, setThumbnailSizeWarning] = useState<string>('');
   const [newDescription, setNewDescription] = useState('');
   const [newFps, setNewFps] = useState('');
+  const [newDuration, setNewDuration] = useState('0:30');
+  const [newSoftwareUsed, setNewSoftwareUsed] = useState<string[]>(['Premiere Pro', 'After Effects']);
+  const [newCustomSoftware, setNewCustomSoftware] = useState('');
 
   // Edit modal states
   const [editingProject, setEditingProject] = useState<WorkItem | null>(null);
@@ -284,6 +295,9 @@ export default function App() {
   const [editThumbnailFile, setEditThumbnailFile] = useState<File | null>(null);
   const [editFps, setEditFps] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editDuration, setEditDuration] = useState('');
+  const [editSoftwareUsed, setEditSoftwareUsed] = useState<string[]>([]);
+  const [editCustomSoftware, setEditCustomSoftware] = useState('');
 
   const [isOnline, setIsOnline] = useState<boolean>(() => {
     const local = localStorage.getItem('profile_is_online');
@@ -499,6 +513,7 @@ export default function App() {
   const thumbnailInputRef = useRef<HTMLInputElement>(null);
   const lightboxVideoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [dragActive, setDragActive] = useState(false);
 
   // Update clock every single second
@@ -621,14 +636,27 @@ export default function App() {
 
   // Adjust playback rate when altered
   useEffect(() => {
-    if (lightboxVideoRef.current) {
+    const youtubeId = activeLightboxProject ? getYoutubeId(activeLightboxProject.videoUrl || '') : null;
+    if (youtubeId && iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage(
+        JSON.stringify({ event: 'command', func: 'setPlaybackRate', args: [playbackSpeed] }),
+        '*'
+      );
+    } else if (lightboxVideoRef.current) {
       lightboxVideoRef.current.playbackRate = playbackSpeed;
     }
   }, [playbackSpeed, activeLightboxProject]);
 
   // Adjust play/pause state when altered
   useEffect(() => {
-    if (lightboxVideoRef.current) {
+    const youtubeId = activeLightboxProject ? getYoutubeId(activeLightboxProject.videoUrl || '') : null;
+    if (youtubeId && iframeRef.current?.contentWindow) {
+      const command = isPlaying ? 'playVideo' : 'pauseVideo';
+      iframeRef.current.contentWindow.postMessage(
+        JSON.stringify({ event: 'command', func: command, args: '' }),
+        '*'
+      );
+    } else if (lightboxVideoRef.current) {
       if (isPlaying) {
         lightboxVideoRef.current.play().catch(err => {
           console.warn("Failed to play video:", err);
@@ -638,6 +666,18 @@ export default function App() {
       }
     }
   }, [isPlaying, activeLightboxProject]);
+
+  // Adjust mute/unmute state when altered
+  useEffect(() => {
+    const youtubeId = activeLightboxProject ? getYoutubeId(activeLightboxProject.videoUrl || '') : null;
+    if (youtubeId && iframeRef.current?.contentWindow) {
+      const command = isMuted ? 'mute' : 'unMute';
+      iframeRef.current.contentWindow.postMessage(
+        JSON.stringify({ event: 'command', func: command, args: '' }),
+        '*'
+      );
+    }
+  }, [isMuted, activeLightboxProject]);
 
   // Reset play state to true when opening a new lightbox project
   useEffect(() => {
@@ -828,12 +868,11 @@ export default function App() {
         return;
       }
 
-      let suggestedSoftware = ['Premiere Pro'];
-      if (newCategory === 'Social Motion Design' || newCategory === 'Advanced Visual Effects') {
-        suggestedSoftware = ['After Effects', 'Premiere Pro'];
-      } else if (newCategory === 'Professional Color Grading') {
-        suggestedSoftware = ['DaVinci Resolve'];
-      }
+      const customSofts = newCustomSoftware
+        .split(',')
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+      const finalSoftware = [...newSoftwareUsed, ...customSofts];
 
       // 1. Upload Video file to Supabase Storage or use URL
       if (newVideoFile) {
@@ -880,8 +919,8 @@ export default function App() {
         type: newType,
         video_url: finalVideoUrl,
         thumbnail_url: finalThumbnailUrl,
-        duration: '0:30',
-        software_used: suggestedSoftware,
+        duration: newDuration.trim() || '0:30',
+        software_used: finalSoftware,
         description: newDescription.trim() || `Custom media uploaded via Vasanthan Portfolio Workspace.`,
         fps: newFps.trim() || '60 FPS'
       };
@@ -907,6 +946,9 @@ export default function App() {
       setThumbnailSizeWarning('');
       setNewDescription('');
       setNewFps('');
+      setNewDuration('0:30');
+      setNewSoftwareUsed(['Premiere Pro', 'After Effects']);
+      setNewCustomSoftware('');
       setIsUploadOpen(false);
 
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -953,6 +995,14 @@ export default function App() {
     setEditThumbnailFile(null);
     setEditFps(item.fps || '');
     setEditDescription(item.description || '');
+    setEditDuration(item.duration || '0:30');
+
+    // Map existing softwareUsed to checkboxes and custom input
+    const presetNames = ['Premiere Pro', 'After Effects', 'DaVinci Resolve', 'CapCut', 'Photoshop', 'Canva'];
+    const presetSelected = (item.softwareUsed || []).filter(s => presetNames.includes(s));
+    const customSelected = (item.softwareUsed || []).filter(s => !presetNames.includes(s));
+    setEditSoftwareUsed(presetSelected);
+    setEditCustomSoftware(customSelected.join(', '));
   };
 
   const handleUpdateWorkItem = async (e: React.FormEvent) => {
@@ -1003,6 +1053,12 @@ export default function App() {
         finalThumbnailUrl = urlData.publicUrl;
       }
 
+      const customSofts = editCustomSoftware
+        .split(',')
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+      const finalSoftware = [...editSoftwareUsed, ...customSofts];
+
       // 3. Update work item in Supabase Database
       setUploadProgress('Saving updates to database...');
       const { error: dbErr } = await supabase
@@ -1014,7 +1070,9 @@ export default function App() {
           video_url: finalVideoUrl,
           thumbnail_url: finalThumbnailUrl,
           fps: editFps.trim(),
-          description: editDescription.trim()
+          description: editDescription.trim(),
+          duration: editDuration.trim() || '0:30',
+          software_used: finalSoftware
         })
         .eq('id', editingProject.id);
 
@@ -2157,24 +2215,43 @@ export default function App() {
               {/* VIDEO CONTAINER */}
               <div className="col-span-1 lg:col-span-2 bg-black flex flex-col items-center justify-center relative border-r border-[#1a1a1a] min-h-[280px] sm:min-h-[400px]">
                 
-                <video
-                  ref={lightboxVideoRef}
-                  src={activeLightboxProject.videoUrl}
-                  loop
-                  muted={isMuted}
-                  autoPlay={isPlaying}
-                  controlsList="nodownload"
-                  disablePictureInPicture
-                  draggable={false}
-                  onContextMenu={(e) => e.preventDefault()}
-                  className="max-h-[380px] sm:max-h-[460px] w-full object-contain transition-all duration-300 select-none"
-                  style={{ 
-                    filter: getFilterStyle(),
-                    userSelect: 'none',
-                    WebkitUserDrag: 'none',
-                    WebkitTouchCallout: 'none'
-                  }}
-                />
+                {(() => {
+                  const youtubeId = getYoutubeId(activeLightboxProject.videoUrl || '');
+                  if (youtubeId) {
+                    return (
+                      <iframe
+                        ref={iframeRef}
+                        src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=${isMuted ? 1 : 0}&playlist=${youtubeId}&loop=1&controls=1&enablejsapi=1`}
+                        title="YouTube video player"
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                        className="w-full h-full min-h-[280px] sm:min-h-[400px] lg:min-h-[450px]"
+                        style={{ filter: getFilterStyle() }}
+                      />
+                    );
+                  }
+                  return (
+                    <video
+                      ref={lightboxVideoRef}
+                      src={activeLightboxProject.videoUrl}
+                      loop
+                      muted={isMuted}
+                      autoPlay={isPlaying}
+                      controlsList="nodownload"
+                      disablePictureInPicture
+                      draggable={false}
+                      onContextMenu={(e) => e.preventDefault()}
+                      className="max-h-[380px] sm:max-h-[460px] w-full object-contain transition-all duration-300 select-none"
+                      style={{ 
+                        filter: getFilterStyle(),
+                        userSelect: 'none',
+                        WebkitUserDrag: 'none',
+                        WebkitTouchCallout: 'none'
+                      }}
+                    />
+                  );
+                })()}
 
                 <div className="absolute top-4 left-4 text-[9px] font-mono text-white/20 bg-black/30 px-2 py-0.5 rounded backdrop-blur-sm pointer-events-none">
                   VASANTHAN K. CONSOLE | WATERMARK
@@ -2578,17 +2655,75 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
-                  Frame Rate (FPS)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. 60 FPS, 24 FPS, 23.976"
-                  value={newFps}
-                  onChange={(e) => setNewFps(e.target.value)}
-                  className="bg-black border border-[#1a1a1a] rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono placeholder:text-zinc-700"
-                />
+              {/* DURATION & FPS CONFIGURATION */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
+                    Duration *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 0:30, 1:45"
+                    value={newDuration}
+                    onChange={(e) => setNewDuration(e.target.value)}
+                    className="bg-black border border-[#1a1a1a] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
+                    Frame Rate (FPS)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 60 FPS, 24 FPS"
+                    value={newFps}
+                    onChange={(e) => setNewFps(e.target.value)}
+                    className="bg-black border border-[#1a1a1a] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono placeholder:text-zinc-700"
+                  />
+                </div>
+              </div>
+
+              {/* SOFTWARE USED SELECTION */}
+              <div className="border border-[#1a1a1a] bg-[#050505] p-3 rounded flex flex-col gap-3">
+                <span className="text-[9px] font-mono font-bold text-[#00ff00] uppercase tracking-wider">
+                  🛠️ SOFTWARE USED TAGS
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {['Premiere Pro', 'After Effects', 'DaVinci Resolve', 'CapCut', 'Photoshop', 'Canva'].map((soft) => {
+                    const isChecked = newSoftwareUsed.includes(soft);
+                    return (
+                      <label key={soft} className="flex items-center gap-2 text-xs text-zinc-300 font-mono cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) {
+                              setNewSoftwareUsed(newSoftwareUsed.filter(s => s !== soft));
+                            } else {
+                              setNewSoftwareUsed([...newSoftwareUsed, soft]);
+                            }
+                          }}
+                          className="accent-[#00ff00] border-zinc-800 bg-black rounded"
+                        />
+                        {soft}
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-col gap-1.5 mt-1 border-t border-zinc-900 pt-2.5">
+                  <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
+                    Other / Custom Software (comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Blender, Cinema 4D, Final Cut Pro"
+                    value={newCustomSoftware}
+                    onChange={(e) => setNewCustomSoftware(e.target.value)}
+                    className="bg-black border border-[#1a1a1a] rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono"
+                  />
+                </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
@@ -2790,17 +2925,75 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
-                  Frame Rate (FPS)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. 60 FPS, 24 FPS, 23.976"
-                  value={editFps}
-                  onChange={(e) => setEditFps(e.target.value)}
-                  className="bg-black border border-[#1a1a1a] rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono placeholder:text-zinc-700"
-                />
+              {/* DURATION & FPS CONFIGURATION */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
+                    Duration *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 0:30, 1:45"
+                    value={editDuration}
+                    onChange={(e) => setEditDuration(e.target.value)}
+                    className="bg-black border border-[#1a1a1a] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
+                    Frame Rate (FPS)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 60 FPS, 24 FPS"
+                    value={editFps}
+                    onChange={(e) => setEditFps(e.target.value)}
+                    className="bg-black border border-[#1a1a1a] rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono placeholder:text-zinc-700"
+                  />
+                </div>
+              </div>
+
+              {/* SOFTWARE USED SELECTION */}
+              <div className="border border-[#1a1a1a] bg-[#050505] p-3 rounded flex flex-col gap-3">
+                <span className="text-[9px] font-mono font-bold text-[#00ff00] uppercase tracking-wider">
+                  🛠️ SOFTWARE USED TAGS
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {['Premiere Pro', 'After Effects', 'DaVinci Resolve', 'CapCut', 'Photoshop', 'Canva'].map((soft) => {
+                    const isChecked = editSoftwareUsed.includes(soft);
+                    return (
+                      <label key={soft} className="flex items-center gap-2 text-xs text-zinc-300 font-mono cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) {
+                              setEditSoftwareUsed(editSoftwareUsed.filter(s => s !== soft));
+                            } else {
+                              setEditSoftwareUsed([...editSoftwareUsed, soft]);
+                            }
+                          }}
+                          className="accent-[#00ff00] border-zinc-800 bg-black rounded"
+                        />
+                        {soft}
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-col gap-1.5 mt-1 border-t border-zinc-900 pt-2.5">
+                  <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
+                    Other / Custom Software (comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Blender, Cinema 4D, Final Cut Pro"
+                    value={editCustomSoftware}
+                    onChange={(e) => setEditCustomSoftware(e.target.value)}
+                    className="bg-black border border-[#1a1a1a] rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono"
+                  />
+                </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
