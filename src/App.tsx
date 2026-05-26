@@ -413,7 +413,11 @@ export default function App() {
             videoUrl: item.video_url || '',
             thumbnailUrl: item.thumbnail_url || '',
             duration: item.duration || '',
-            softwareUsed: item.software_used || [],
+            softwareUsed: Array.isArray(item.software_used)
+              ? item.software_used
+              : typeof item.software_used === 'string'
+                ? item.software_used.replace(/[{}]/g, '').split(',').map((s: string) => s.trim()).filter(Boolean)
+                : [],
             description: item.description || '',
             createdAt: item.created_at,
             fps: item.fps || '',
