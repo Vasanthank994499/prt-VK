@@ -347,17 +347,28 @@ export default function App() {
     try {
       const { error } = await supabase
         .from('profile_status')
-        .update({ is_online: newStatus })
-        .eq('id', 1);
-      if (error) {
-        const { error: insertErr } = await supabase
-          .from('profile_status')
-          .upsert([{ id: 1, is_online: newStatus }]);
-        if (insertErr) throw insertErr;
-      }
-    } catch (err) {
+        .upsert([{ id: 1, is_online: newStatus }]);
+      if (error) throw error;
+    } catch (err: any) {
       console.error('Error updating profile status:', err);
-      alert('Error updating status: ' + String(err));
+      let errorMsg = err?.message || err?.details || JSON.stringify(err) || String(err);
+      
+      if (errorMsg.includes('row-level security') || errorMsg.includes('RLS') || errorMsg.includes('policy')) {
+        errorMsg += '\n\n💡 Try running this in the Supabase SQL Editor to enable public permissions:\n' +
+          'ALTER TABLE public.profile_status ENABLE ROW LEVEL SECURITY;\n' +
+          'CREATE POLICY "Allow public select" ON public.profile_status FOR SELECT USING (true);\n' +
+          'CREATE POLICY "Allow public insert" ON public.profile_status FOR INSERT WITH CHECK (true);\n' +
+          'CREATE POLICY "Allow public update" ON public.profile_status FOR UPDATE USING (true);';
+      } else if (errorMsg.includes('relation') && (errorMsg.includes('does not exist') || errorMsg.includes('not found'))) {
+        errorMsg += '\n\n💡 Try running this in the Supabase SQL Editor to create the table:\n' +
+          'CREATE TABLE public.profile_status (\n' +
+          '  id bigint PRIMARY KEY,\n' +
+          '  is_online boolean NOT NULL DEFAULT true\n' +
+          ');\n' +
+          'INSERT INTO public.profile_status (id, is_online) VALUES (1, true);';
+      }
+      
+      alert('Error updating status: ' + errorMsg);
       setIsOnline(!newStatus);
     }
   };
@@ -1124,12 +1135,16 @@ export default function App() {
         <div className="flex items-center gap-3">
           <button 
             onClick={(e) => handleNavClick('dashboard', e)} 
-            className="flex items-center gap-2 bg-[#0a0a0a] border border-[#1a1a1a] px-3.5 py-1.5 rounded-full text-[10px] text-gray-400 hover:text-[#00ff00] hover:border-[#00ff00]/55 transition-all font-mono outline-none cursor-pointer"
+            className={`flex items-center gap-2 bg-[#0a0a0a] border px-3.5 py-1.5 rounded-full text-[10px] font-mono outline-none transition-all cursor-pointer ${
+              isOnline 
+                ? 'border-[#1a1a1a] text-gray-400 hover:text-[#00ff00] hover:border-[#00ff00]/55' 
+                : 'border-red-950 text-red-500/80 hover:text-red-400 hover:border-red-500/55'
+            }`}
           >
-            <span className="w-2 h-2 rounded-full bg-[#00ff00] animate-pulse" />
+            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#00ff00] animate-pulse' : 'bg-red-500'}`} />
             <span>TECH FRAME</span>
-            <span className="text-zinc-800">|</span>
-            <span>ACTIVE</span>
+            <span className={isOnline ? 'text-zinc-805' : 'text-red-950'}>|</span>
+            <span>{isOnline ? 'ACTIVE' : 'DISABLED'}</span>
           </button>
         </div>
 
