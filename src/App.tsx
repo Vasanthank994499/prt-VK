@@ -2000,7 +2000,7 @@ export default function App() {
                 <div className="hidden sm:flex items-center gap-2 text-zinc-400 text-[10px]">
                   <span>RATIO: {activeLightboxProject.type.toUpperCase()}</span>
                   <span>|</span>
-                  <span>FPS: 60.00</span>
+                  <span>FPS: {activeLightboxProject.fps || '60.00'}</span>
                 </div>
                 <button 
                   onClick={() => setActiveLightboxProject(null)}
@@ -2053,20 +2053,11 @@ export default function App() {
                     {activeLightboxProject.description}
                   </p>
                   
-                  <div className="flex flex-col gap-1.5 mt-1 bg-zinc-950 border border-[#161616] p-2 rounded text-[10px] text-zinc-400 font-mono">
-                    <div className="flex items-center gap-1.5">
-                      <Info size={12} className="text-[#00ff00]" />
-                      <span>
-                        Category: <span className="text-white font-semibold">{activeLightboxProject.category}</span>
-                      </span>
-                    </div>
-                    {activeLightboxProject.fps && (
-                      <div className="flex items-center gap-1.5 border-t border-zinc-900 pt-1 mt-1 pl-4.5">
-                        <span>
-                          Frame Rate: <span className="text-[#00ff00] font-bold">{activeLightboxProject.fps}</span>
-                        </span>
-                      </div>
-                    )}
+                  <div className="flex items-center gap-1.5 mt-1 bg-zinc-950 border border-[#161616] p-2 rounded text-[10px] text-zinc-400 font-mono">
+                    <Info size={12} className="text-[#00ff00]" />
+                    <span>
+                      Category: <span className="text-white font-semibold">{activeLightboxProject.category}</span>
+                    </span>
                   </div>
                 </div>
 
