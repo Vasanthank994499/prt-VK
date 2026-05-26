@@ -1514,12 +1514,14 @@ export default function App() {
               😊 LINKEDIN PROFILE
             </a>
 
-            <button 
-              onClick={handleResetWorks}
-              className="w-full py-1.5 bg-zinc-950 border border-[#111] text-zinc-500 hover:text-white transition-colors rounded text-[9.5px] font-mono flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <RotateCcw size={10} /> RESET STATE
-            </button>
+            {isAdmin && (
+              <button 
+                onClick={handleResetWorks}
+                className="w-full py-1.5 bg-zinc-950 border border-[#111] text-zinc-500 hover:text-white transition-colors rounded text-[9.5px] font-mono flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw size={10} /> RESET STATE
+              </button>
+            )}
 
             {isAdmin ? (
               <button 
@@ -1657,12 +1659,14 @@ export default function App() {
               <p className="text-xs text-zinc-600 text-center max-w-[320px] mb-4">
                 Let's reset filters to fetch the default pristine high-pacing edits.
               </p>
-              <button 
-                onClick={handleResetWorks}
-                className="px-4 py-2 bg-zinc-900 border border-[#1a1a1a] text-[#00ff00] text-xs font-mono rounded hover:border-[#333] cursor-pointer"
-              >
-                RESET GRID FILTERS
-              </button>
+              {isAdmin && (
+                <button 
+                  onClick={handleResetWorks}
+                  className="px-4 py-2 bg-zinc-900 border border-[#1a1a1a] text-[#00ff00] text-xs font-mono rounded hover:border-[#333] cursor-pointer"
+                >
+                  RESET GRID FILTERS
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
