@@ -1192,7 +1192,7 @@ export default function App() {
           <span className="text-zinc-800 font-light">|</span>
           
           <a 
-            href="https://mail.google.com/mail/?view=cm&fs=1&to=vasanthankasvk@gmail.com" 
+            href="https://mail.google.com/mail/u/0/?view=cm&fs=1&tf=1&to=vasanthankasvk@gmail.com" 
             target="_blank" 
             rel="noopener noreferrer"
             className="px-3.5 py-1.5 border border-[#00ff00] text-[#00ff00] hover:bg-[#00ff00] hover:text-black transition-all duration-300 rounded text-xs font-mono flex items-center gap-1.5 animate-pulse"
@@ -1253,7 +1253,7 @@ export default function App() {
           </div>
           <div className="flex gap-2 mt-2">
             <a 
-              href="https://mail.google.com/mail/?view=cm&fs=1&to=vasanthankasvk@gmail.com"
+              href="https://mail.google.com/mail/u/0/?view=cm&fs=1&tf=1&to=vasanthankasvk@gmail.com"
               target="_blank"
               rel="noopener noreferrer"
               className="flex-1 text-center py-2 bg-zinc-900 rounded border border-[#1a1a1a] text-xs font-mono text-white hover:border-white transition-colors"
@@ -1497,7 +1497,7 @@ export default function App() {
             <div className="text-[10px] text-zinc-600 font-mono tracking-wider mb-2">QUICK CONTROLS</div>
             
             <a 
-              href="https://mail.google.com/mail/?view=cm&fs=1&to=vasanthankasvk@gmail.com"
+              href="https://mail.google.com/mail/u/0/?view=cm&fs=1&tf=1&to=vasanthankasvk@gmail.com"
               target="_blank"
               rel="noopener noreferrer"
               className="w-full py-2 bg-[#00ff00]/5 border border-[#00ff00]/25 hover:bg-[#00ff00] hover:text-black hover:border-transparent text-[#00ff00] transition-all rounded text-[10px] font-mono flex items-center justify-center gap-1.5"
@@ -1940,7 +1940,7 @@ export default function App() {
               <div className="flex flex-col gap-2.5">
                 {/* Mail */}
                 <a 
-                  href="https://mail.google.com/mail/?view=cm&fs=1&to=vasanthankasvk@gmail.com"
+                  href="https://mail.google.com/mail/u/0/?view=cm&fs=1&tf=1&to=vasanthankasvk@gmail.com"
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="p-3 bg-zinc-950 border border-[#1a1a1a] rounded flex items-center justify-between hover:border-[#00ff00] hover:bg-[#080808] transition-all group"
