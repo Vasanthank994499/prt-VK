@@ -325,23 +325,7 @@ export default function App() {
   const [uploadProgress, setUploadProgress] = useState('');
 
   const fetchStatus = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profile_status')
-        .select('is_online')
-        .eq('id', 1)
-        .single();
-      if (error) {
-        console.warn('Could not fetch status, fallback to local storage:', error);
-        return;
-      }
-      if (data) {
-        setIsOnline(data.is_online);
-        localStorage.setItem('profile_is_online', String(data.is_online));
-      }
-    } catch (err) {
-      console.error('Error fetching profile status:', err);
-    }
+    // Status is synchronized dynamically via the 'works' table (system-online-status item)
   };
 
   const toggleOnlineStatus = async () => {
@@ -351,12 +335,17 @@ export default function App() {
     localStorage.setItem('profile_is_online', String(newStatus));
     try {
       const { error } = await supabase
-        .from('profile_status')
-        .upsert([{ id: 1, is_online: newStatus }]);
+        .from('works')
+        .upsert([{ 
+          id: 'system-online-status', 
+          title: 'SYSTEM STATUS', 
+          description: newStatus ? 'online' : 'offline',
+          category: 'System Configuration',
+          type: 'normal'
+        }]);
       if (error) throw error;
     } catch (err: any) {
-      console.warn('Could not sync online/offline status to database, using local storage instead:', err);
-      // Removed blocking alerts and state reversion to prevent user disruption
+      console.warn('Could not sync online/offline status to database works table, using local storage instead:', err);
     }
   };
 
@@ -369,22 +358,37 @@ export default function App() {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        const mappedList = data.map((item: any) => ({
-          id: item.id,
-          title: item.title || '',
-          category: item.category || '',
-          type: item.type || 'normal',
-          videoUrl: item.video_url || '',
-          thumbnailUrl: item.thumbnail_url || '',
-          duration: item.duration || '',
-          softwareUsed: item.software_used || [],
-          description: item.description || '',
-          createdAt: item.created_at,
-          fps: item.fps || '',
-        }));
+        // Find system status row
+        const statusRow = data.find((item: any) => item.id === 'system-online-status');
+        if (statusRow) {
+          const isOnlineVal = statusRow.description === 'online';
+          setIsOnline(isOnlineVal);
+          localStorage.setItem('profile_is_online', String(isOnlineVal));
+        }
 
-        mappedList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setWorks(mappedList);
+        // Filter out status row from display list
+        const displayData = data.filter((item: any) => item.id !== 'system-online-status');
+
+        if (displayData.length > 0) {
+          const mappedList = displayData.map((item: any) => ({
+            id: item.id,
+            title: item.title || '',
+            category: item.category || '',
+            type: item.type || 'normal',
+            videoUrl: item.video_url || '',
+            thumbnailUrl: item.thumbnail_url || '',
+            duration: item.duration || '',
+            softwareUsed: item.software_used || [],
+            description: item.description || '',
+            createdAt: item.created_at,
+            fps: item.fps || '',
+          }));
+
+          mappedList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          setWorks(mappedList);
+        } else {
+          setWorks(INITIAL_WORKS);
+        }
       } else {
         setWorks(INITIAL_WORKS);
       }
@@ -408,20 +412,8 @@ export default function App() {
       )
       .subscribe();
 
-    const statusChannel = supabase
-      .channel('status-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'profile_status' },
-        () => {
-          fetchStatus();
-        }
-      )
-      .subscribe();
-
     return () => {
       supabase.removeChannel(worksChannel);
-      supabase.removeChannel(statusChannel);
     };
   }, []);
 
@@ -687,11 +679,16 @@ export default function App() {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        const { error: deleteErr } = await supabase
-          .from('works')
-          .delete()
-          .in('id', data.map((d: any) => d.id));
-        if (deleteErr) throw deleteErr;
+        const idsToDelete = data
+          .map((d: any) => d.id)
+          .filter((id: string) => id !== 'system-online-status');
+        if (idsToDelete.length > 0) {
+          const { error: deleteErr } = await supabase
+            .from('works')
+            .delete()
+            .in('id', idsToDelete);
+          if (deleteErr) throw deleteErr;
+        }
       }
     } catch (err: any) {
       console.error('Error resetting works:', err);
