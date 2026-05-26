@@ -271,7 +271,10 @@ export default function App() {
   const [thumbnailSizeWarning, setThumbnailSizeWarning] = useState<string>('');
   const [newDescription, setNewDescription] = useState('');
   const [newFps, setNewFps] = useState('');
-  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [isOnline, setIsOnline] = useState<boolean>(() => {
+    const local = localStorage.getItem('profile_is_online');
+    return local !== null ? local === 'true' : true;
+  });
   
   // Fixed profile image (not changeable)
   const profileImage = PROFILE_IMAGE_PATH;
@@ -329,11 +332,12 @@ export default function App() {
         .eq('id', 1)
         .single();
       if (error) {
-        console.warn('Could not fetch status, fallback to true:', error);
+        console.warn('Could not fetch status, fallback to local storage:', error);
         return;
       }
       if (data) {
         setIsOnline(data.is_online);
+        localStorage.setItem('profile_is_online', String(data.is_online));
       }
     } catch (err) {
       console.error('Error fetching profile status:', err);
@@ -344,32 +348,15 @@ export default function App() {
     if (!isAdmin) return;
     const newStatus = !isOnline;
     setIsOnline(newStatus);
+    localStorage.setItem('profile_is_online', String(newStatus));
     try {
       const { error } = await supabase
         .from('profile_status')
         .upsert([{ id: 1, is_online: newStatus }]);
       if (error) throw error;
     } catch (err: any) {
-      console.error('Error updating profile status:', err);
-      let errorMsg = err?.message || err?.details || JSON.stringify(err) || String(err);
-      
-      if (errorMsg.includes('row-level security') || errorMsg.includes('RLS') || errorMsg.includes('policy')) {
-        errorMsg += '\n\n💡 Try running this in the Supabase SQL Editor to enable public permissions:\n' +
-          'ALTER TABLE public.profile_status ENABLE ROW LEVEL SECURITY;\n' +
-          'CREATE POLICY "Allow public select" ON public.profile_status FOR SELECT USING (true);\n' +
-          'CREATE POLICY "Allow public insert" ON public.profile_status FOR INSERT WITH CHECK (true);\n' +
-          'CREATE POLICY "Allow public update" ON public.profile_status FOR UPDATE USING (true);';
-      } else if (errorMsg.includes('relation') && (errorMsg.includes('does not exist') || errorMsg.includes('not found'))) {
-        errorMsg += '\n\n💡 Try running this in the Supabase SQL Editor to create the table:\n' +
-          'CREATE TABLE public.profile_status (\n' +
-          '  id bigint PRIMARY KEY,\n' +
-          '  is_online boolean NOT NULL DEFAULT true\n' +
-          ');\n' +
-          'INSERT INTO public.profile_status (id, is_online) VALUES (1, true);';
-      }
-      
-      alert('Error updating status: ' + errorMsg);
-      setIsOnline(!newStatus);
+      console.warn('Could not sync online/offline status to database, using local storage instead:', err);
+      // Removed blocking alerts and state reversion to prevent user disruption
     }
   };
 
