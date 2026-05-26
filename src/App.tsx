@@ -908,6 +908,16 @@ export default function App() {
           '2. MISSING STORAGE BUCKET: Check your Supabase Dashboard > Storage. You must create a bucket named exactly "vkportfolio" (all lowercase).\n' +
           '3. BUCKET NOT PUBLIC: Go to Storage > Bucket Settings on Supabase and make sure the "vkportfolio" bucket is set to "Public" (enabled).\n' +
           '4. RLS UPLOAD POLICY MISSING: You need an RLS policy on the "vkportfolio" storage bucket to allow uploads. Go to Storage > Policies, click New Policy under "vkportfolio" bucket, and select "Get started quickly" > "Allow public uploads" or "Enable read/write access for all users".';
+      } else if (userFriendlyMsg.toLowerCase().includes('maximum allowed size') || userFriendlyMsg.toLowerCase().includes('exceeded the size limit') || userFriendlyMsg.toLowerCase().includes('payload too large')) {
+        const fileSizeMb = newVideoFile ? (newVideoFile.size / (1024 * 1024)).toFixed(2) : 'N/A';
+        userFriendlyMsg = `The selected video file is too large (${fileSizeMb} MB) and exceeds your Supabase bucket's maximum allowed size limit.\n\n` +
+          '💡 How to increase the file size limit:\n' +
+          '1. Go to your Supabase Dashboard.\n' +
+          '2. Navigate to "Storage" in the left sidebar.\n' +
+          '3. Click on the settings/edit icon (three dots) next to your "vkportfolio" bucket.\n' +
+          '4. Under "Edit Bucket settings", find "Allowed Max File Size" (or "Maximum file size").\n' +
+          '5. Set it to a larger limit, e.g., 524288000 bytes (for 500 MB) or clear it entirely.\n' +
+          '6. Click "Save" and try uploading your video again.';
       }
       alert('Error uploading or creating work item: ' + userFriendlyMsg);
     } finally {
