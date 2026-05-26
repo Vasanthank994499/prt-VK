@@ -1270,7 +1270,7 @@ export default function App() {
             </a>
           </div>
           <div className="h-px bg-[#111] my-1" />
-          {isAdmin ? (
+          {isAdmin && (
             <button 
               onClick={() => {
                 handleAdminLogout();
@@ -1279,17 +1279,6 @@ export default function App() {
               className="w-full py-2 bg-[#00ff00]/10 border border-[#00ff00]/25 hover:bg-[#00ff00] hover:text-black hover:border-transparent text-[#00ff00] transition-colors rounded text-xs font-mono flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Unlock size={11} /> LOCK CONSOLE (LOGOUT)
-            </button>
-          ) : (
-            <button 
-              onClick={() => {
-                setAuthTab('github');
-                setIsAdminAuthOpen(true);
-                setIsMobileMenuOpen(false);
-              }}
-              className="w-full py-2 bg-[#030303] border border-[#111] text-zinc-400 hover:text-white hover:border-[#222] transition-colors rounded text-xs font-mono flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <Lock size={11} /> OWNER LOGIN
             </button>
           )}
         </div>
@@ -1523,22 +1512,12 @@ export default function App() {
               </button>
             )}
 
-            {isAdmin ? (
+            {isAdmin && (
               <button 
                 onClick={handleAdminLogout}
                 className="w-full py-1.5 bg-[#00ff00]/10 border border-[#00ff00]/25 hover:bg-[#00ff00] hover:text-black hover:border-transparent text-[#00ff00] transition-colors rounded text-[9.5px] font-mono flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Unlock size={10} /> LOCK CONSOLE
-              </button>
-            ) : (
-              <button 
-                onClick={() => {
-                  setAuthTab('github');
-                  setIsAdminAuthOpen(true);
-                }}
-                className="w-full py-1.5 bg-[#030303] border border-[#111] text-zinc-650 hover:text-white hover:border-[#222] transition-colors rounded text-[9.5px] font-mono flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Lock size={10} /> OWNER ATTAINMENT
               </button>
             )}
           </div>
