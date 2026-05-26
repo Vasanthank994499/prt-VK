@@ -38,6 +38,7 @@ interface WorkItem {
   duration?: string;
   softwareUsed?: string[];
   description?: string;
+  fps?: string;
 }
 
 // Initial state values matching Vasanthan K's portfolio
@@ -269,6 +270,8 @@ export default function App() {
   const [newThumbnailBase64, setNewThumbnailBase64] = useState<string>('');
   const [thumbnailSizeWarning, setThumbnailSizeWarning] = useState<string>('');
   const [newDescription, setNewDescription] = useState('');
+  const [newFps, setNewFps] = useState('');
+  const [isOnline, setIsOnline] = useState<boolean>(true);
   
   // Fixed profile image (not changeable)
   const profileImage = PROFILE_IMAGE_PATH;
@@ -318,6 +321,47 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
 
+  const fetchStatus = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profile_status')
+        .select('is_online')
+        .eq('id', 1)
+        .single();
+      if (error) {
+        console.warn('Could not fetch status, fallback to true:', error);
+        return;
+      }
+      if (data) {
+        setIsOnline(data.is_online);
+      }
+    } catch (err) {
+      console.error('Error fetching profile status:', err);
+    }
+  };
+
+  const toggleOnlineStatus = async () => {
+    if (!isAdmin) return;
+    const newStatus = !isOnline;
+    setIsOnline(newStatus);
+    try {
+      const { error } = await supabase
+        .from('profile_status')
+        .update({ is_online: newStatus })
+        .eq('id', 1);
+      if (error) {
+        const { error: insertErr } = await supabase
+          .from('profile_status')
+          .upsert([{ id: 1, is_online: newStatus }]);
+        if (insertErr) throw insertErr;
+      }
+    } catch (err) {
+      console.error('Error updating profile status:', err);
+      alert('Error updating status: ' + String(err));
+      setIsOnline(!newStatus);
+    }
+  };
+
   // 2. Real-time Works synchronization listener hook
   const fetchWorks = async () => {
     try {
@@ -338,6 +382,7 @@ export default function App() {
           softwareUsed: item.software_used || [],
           description: item.description || '',
           createdAt: item.created_at,
+          fps: item.fps || '',
         }));
 
         mappedList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -352,8 +397,9 @@ export default function App() {
 
   useEffect(() => {
     fetchWorks();
+    fetchStatus();
 
-    const channel = supabase
+    const worksChannel = supabase
       .channel('works-realtime')
       .on(
         'postgres_changes',
@@ -364,8 +410,20 @@ export default function App() {
       )
       .subscribe();
 
+    const statusChannel = supabase
+      .channel('status-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profile_status' },
+        () => {
+          fetchStatus();
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(worksChannel);
+      supabase.removeChannel(statusChannel);
     };
   }, []);
 
@@ -546,6 +604,26 @@ export default function App() {
       lightboxVideoRef.current.playbackRate = playbackSpeed;
     }
   }, [playbackSpeed, activeLightboxProject]);
+
+  // Adjust play/pause state when altered
+  useEffect(() => {
+    if (lightboxVideoRef.current) {
+      if (isPlaying) {
+        lightboxVideoRef.current.play().catch(err => {
+          console.warn("Failed to play video:", err);
+        });
+      } else {
+        lightboxVideoRef.current.pause();
+      }
+    }
+  }, [isPlaying, activeLightboxProject]);
+
+  // Reset play state to true when opening a new lightbox project
+  useEffect(() => {
+    if (activeLightboxProject) {
+      setIsPlaying(true);
+    }
+  }, [activeLightboxProject]);
 
   // Sorter / Filter Logic Helper
   const getFilteredWorks = () => {
@@ -778,7 +856,8 @@ export default function App() {
         thumbnail_url: finalThumbnailUrl,
         duration: '0:30',
         software_used: suggestedSoftware,
-        description: newDescription.trim() || `Custom media uploaded via Vasanthan Portfolio Workspace.`
+        description: newDescription.trim() || `Custom media uploaded via Vasanthan Portfolio Workspace.`,
+        fps: newFps.trim() || '60 FPS'
       };
 
       const { error: dbErr } = await supabase
@@ -801,6 +880,7 @@ export default function App() {
       setVideoSizeWarning('');
       setThumbnailSizeWarning('');
       setNewDescription('');
+      setNewFps('');
       setIsUploadOpen(false);
 
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -1204,10 +1284,16 @@ export default function App() {
           <div className="flex flex-col gap-4 border-b border-[#1a1a1a] pb-5">
             <div className="relative w-24 h-24 mx-auto mb-1">
               {/* Luminous aura shadow border */}
-              <div className="absolute inset-x-0 -top-1 -bottom-1 rounded-full bg-gradient-to-tr from-[#00ff00]/30 via-emerald-800/10 to-transparent blur-md animate-pulse pointer-events-none" />
+              <div className={`absolute inset-x-0 -top-1 -bottom-1 rounded-full blur-md animate-pulse pointer-events-none transition-all duration-300 ${
+                isOnline 
+                  ? 'bg-gradient-to-tr from-[#00ff00]/30 via-emerald-800/10 to-transparent' 
+                  : 'bg-gradient-to-tr from-red-500/30 via-red-800/10 to-transparent'
+              }`} />
               
               <div 
-                className="w-24 h-24 rounded-full border-2 border-[#00ff00] overflow-hidden bg-zinc-900 relative z-10"
+                className={`w-24 h-24 rounded-full border-2 overflow-hidden bg-zinc-900 relative z-10 transition-colors duration-300 ${
+                  isOnline ? 'border-[#00ff00]' : 'border-red-500'
+                }`}
               >
                 <img 
                   src={profileImage} 
@@ -1218,8 +1304,12 @@ export default function App() {
               </div>
 
               {/* Status indicator pill in right bottom corners */}
-              <div className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-black border-2 border-[#00ff00] flex items-center justify-center z-20">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] animate-ping" />
+              <div className={`absolute bottom-1 right-1 w-4 h-4 rounded-full bg-black border-2 flex items-center justify-center z-20 transition-colors duration-300 ${
+                isOnline ? 'border-[#00ff00]' : 'border-red-500'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  isOnline ? 'bg-[#00ff00] animate-ping' : 'bg-red-500'
+                }`} />
               </div>
             </div>
 
@@ -1244,10 +1334,26 @@ export default function App() {
               <h2 className="text-base font-black tracking-widest text-white uppercase font-sans">
                 VASANTHAN K
               </h2>
-              <div className="inline-flex items-center gap-1.5 px-3 py-0.5 mt-1.5 rounded bg-zinc-900 border border-[#1a1a1a] text-[9.5px] font-mono text-[#00ff00]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00]" />
-                ONLINE
-              </div>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={toggleOnlineStatus}
+                  title="Click to toggle Online/Offline status globally"
+                  className={`inline-flex items-center gap-1.5 px-3 py-0.5 mt-1.5 rounded bg-zinc-900 border border-[#1a1a1a] text-[9.5px] font-mono cursor-pointer transition-all hover:scale-105 active:scale-95 ${
+                    isOnline ? 'text-[#00ff00] hover:bg-zinc-800' : 'text-red-500 hover:bg-zinc-800'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-[#00ff00] animate-pulse' : 'bg-red-500'}`} />
+                  {isOnline ? 'ONLINE' : 'OFFLINE'}
+                </button>
+              ) : (
+                <div className={`inline-flex items-center gap-1.5 px-3 py-0.5 mt-1.5 rounded bg-zinc-900 border border-[#1a1a1a] text-[9.5px] font-mono ${
+                  isOnline ? 'text-[#00ff00]' : 'text-red-500'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-[#00ff00] animate-pulse' : 'bg-red-500'}`} />
+                  {isOnline ? 'ONLINE' : 'OFFLINE'}
+                </div>
+              )}
             </div>
 
             <div className="text-center bg-black border border-[#161616] p-3 rounded">
@@ -1947,11 +2053,20 @@ export default function App() {
                     {activeLightboxProject.description}
                   </p>
                   
-                  <div className="flex items-center gap-1.5 mt-1 bg-zinc-950 border border-[#161616] p-2 rounded">
-                    <Info size={12} className="text-[#00ff00]" />
-                    <span className="text-[10px] text-zinc-400 font-mono">
-                      Category: <span className="text-white font-semibold">{activeLightboxProject.category}</span>
-                    </span>
+                  <div className="flex flex-col gap-1.5 mt-1 bg-zinc-950 border border-[#161616] p-2 rounded text-[10px] text-zinc-400 font-mono">
+                    <div className="flex items-center gap-1.5">
+                      <Info size={12} className="text-[#00ff00]" />
+                      <span>
+                        Category: <span className="text-white font-semibold">{activeLightboxProject.category}</span>
+                      </span>
+                    </div>
+                    {activeLightboxProject.fps && (
+                      <div className="flex items-center gap-1.5 border-t border-zinc-900 pt-1 mt-1 pl-4.5">
+                        <span>
+                          Frame Rate: <span className="text-[#00ff00] font-bold">{activeLightboxProject.fps}</span>
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2322,6 +2437,19 @@ export default function App() {
                     className="bg-black border border-[#1a1a1a] rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono placeholder:text-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
                   />
                 </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
+                  Frame Rate (FPS)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 60 FPS, 24 FPS, 23.976"
+                  value={newFps}
+                  onChange={(e) => setNewFps(e.target.value)}
+                  className="bg-black border border-[#1a1a1a] rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono placeholder:text-zinc-700"
+                />
               </div>
 
               <div className="flex flex-col gap-1.5">
