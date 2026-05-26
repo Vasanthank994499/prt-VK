@@ -514,6 +514,7 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [selectedLUT, setSelectedLUT] = useState<'none' | 'teal_orange' | 'cyber' | 'noir' | 'vintage'>('none');
+  const [useDriveIframeFallback, setUseDriveIframeFallback] = useState(false);
   
   // System states
   const [currentTime, setCurrentTime] = useState<string>('');
@@ -692,10 +693,11 @@ export default function App() {
     }
   }, [isMuted, activeLightboxProject]);
 
-  // Reset play state to true when opening a new lightbox project
+  // Reset play state to true and fallback to false when opening a new lightbox project
   useEffect(() => {
     if (activeLightboxProject) {
       setIsPlaying(true);
+      setUseDriveIframeFallback(false);
     }
   }, [activeLightboxProject]);
 
@@ -2256,7 +2258,33 @@ export default function App() {
                       />
                     );
                   }
-                  if (driveId) {
+                  if (driveId && !useDriveIframeFallback) {
+                    return (
+                      <video
+                        ref={lightboxVideoRef}
+                        src={`https://drive.google.com/uc?export=view&id=${driveId}`}
+                        loop
+                        muted={isMuted}
+                        autoPlay={isPlaying}
+                        controlsList="nodownload"
+                        disablePictureInPicture
+                        draggable={false}
+                        onContextMenu={(e) => e.preventDefault()}
+                        onError={() => {
+                          console.warn("Direct Google Drive video stream failed, falling back to embedded iframe player.");
+                          setUseDriveIframeFallback(true);
+                        }}
+                        className="max-h-[380px] sm:max-h-[460px] w-full object-contain transition-all duration-300 select-none"
+                        style={{ 
+                          filter: getFilterStyle(),
+                          userSelect: 'none',
+                          WebkitUserDrag: 'none',
+                          WebkitTouchCallout: 'none'
+                        }}
+                      />
+                    );
+                  }
+                  if (driveId && useDriveIframeFallback) {
                     return (
                       <iframe
                         src={`https://drive.google.com/file/d/${driveId}/preview`}
@@ -2322,6 +2350,15 @@ export default function App() {
                       Category: <span className="text-white font-semibold">{activeLightboxProject.category}</span>
                     </span>
                   </div>
+
+                  {useDriveIframeFallback && (
+                    <div className="flex items-start gap-1.5 mt-2 bg-amber-950/20 border border-amber-900/30 p-2 rounded text-[9px] text-amber-500 font-mono leading-normal">
+                      <Info size={12} className="shrink-0 mt-0.5 animate-pulse text-amber-400" />
+                      <span>
+                        Note: Direct streaming failed. Using Google Drive player fallback. Programmatic Play/Pause controls are disabled; please use player controls inside the video.
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* LUT WORKSPACE */}
