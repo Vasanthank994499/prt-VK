@@ -22,7 +22,8 @@ import {
   Palette,
   Sparkles,
   Github,
-  Edit
+  Edit,
+  Settings
 } from 'lucide-react';
 
 import { supabase, hasSupabaseConfig, updateSupabaseCredentials, clearSupabaseCredentials } from './supabase';
@@ -123,7 +124,7 @@ interface SoftwareItem {
   description: string;
 }
 
-const SOFTWARE_LIST: SoftwareItem[] = [
+const INITIAL_SOFTWARE_LIST: SoftwareItem[] = [
   {
     id: 'pr',
     name: 'Premiere Pro',
@@ -181,7 +182,7 @@ interface SkillItem {
   subSkills: string;
 }
 
-const SKILL_ITEMS: SkillItem[] = [
+const INITIAL_SKILL_ITEMS: SkillItem[] = [
   { name: 'Studio Motion', percentage: 95, subSkills: 'Storytelling, Multi-cam sync, Audiovisual coherence' },
   { name: 'High-End Motion Graphics', percentage: 92, subSkills: 'Kinetic typography, Custom logo animations, Seamless transitions' },
   { name: 'Professional Color Grading', percentage: 88, subSkills: 'RGB Curves, LUT calibration, Cinematic Teal & Orange balance' },
@@ -191,7 +192,7 @@ const SKILL_ITEMS: SkillItem[] = [
 ];
 
 // Categorized structure for Software Deck with corresponding Lucide icons
-const SOFTWARE_CATEGORIES = [
+const INITIAL_SOFTWARE_CATEGORIES = [
   {
     name: 'NLE & TIMELINE EDITING',
     iconName: 'video',
@@ -210,7 +211,7 @@ const SOFTWARE_CATEGORIES = [
 ];
 
 // Categorized structure for Expert Services Skills with corresponding Lucide icons
-const SKILL_CATEGORIES = [
+const INITIAL_SKILL_CATEGORIES = [
   {
     name: 'MOTION & TIMELINE DECK',
     iconName: 'layers',
@@ -243,8 +244,10 @@ const renderCategoryIcon = (iconName: string) => {
       return <Sliders className="w-3.5 h-3.5 text-[#00ff00]" />;
     case 'volume':
       return <Volume2 className="w-3.5 h-3.5 text-[#00ff00]" />;
+    case 'sparkles':
+      return <Sparkles className="w-3.5 h-3.5 text-[#00ff00]" />;
     default:
-      return null;
+      return <Sparkles className="w-3.5 h-3.5 text-[#00ff00]" />;
   }
 };
 
@@ -338,6 +341,81 @@ export default function App() {
   const [inputUrl, setInputUrl] = useState(() => localStorage.getItem('VITE_SUPABASE_URL') || '');
   const [inputKey, setInputKey] = useState(() => localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
   const [isConfiguredState, setIsConfiguredState] = useState(() => hasSupabaseConfig());
+
+  // ─── Admin-customizable Expert Services & Software Deck state ───
+  const [skillItems, setSkillItems] = useState<SkillItem[]>(() => {
+    try { const s = localStorage.getItem('custom_skill_items'); return s ? JSON.parse(s) : INITIAL_SKILL_ITEMS; } catch { return INITIAL_SKILL_ITEMS; }
+  });
+  const [skillCategories, setSkillCategories] = useState<{ name: string; iconName: string; itemNames: string[] }[]>(() => {
+    try { const s = localStorage.getItem('custom_skill_categories'); return s ? JSON.parse(s) : INITIAL_SKILL_CATEGORIES; } catch { return INITIAL_SKILL_CATEGORIES; }
+  });
+  const [softwareList, setSoftwareList] = useState<SoftwareItem[]>(() => {
+    try { const s = localStorage.getItem('custom_software_list'); return s ? JSON.parse(s) : INITIAL_SOFTWARE_LIST; } catch { return INITIAL_SOFTWARE_LIST; }
+  });
+  const [softwareCategories, setSoftwareCategories] = useState<{ name: string; iconName: string; itemNames: string[] }[]>(() => {
+    try { const s = localStorage.getItem('custom_software_categories'); return s ? JSON.parse(s) : INITIAL_SOFTWARE_CATEGORIES; } catch { return INITIAL_SOFTWARE_CATEGORIES; }
+  });
+
+  // Admin settings modal
+  const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
+  const [adminSettingsTab, setAdminSettingsTab] = useState<'skills' | 'categories' | 'software'>('skills');
+
+  // Persist customizable data to localStorage
+  useEffect(() => { localStorage.setItem('custom_skill_items', JSON.stringify(skillItems)); }, [skillItems]);
+  useEffect(() => { localStorage.setItem('custom_skill_categories', JSON.stringify(skillCategories)); }, [skillCategories]);
+  useEffect(() => { localStorage.setItem('custom_software_list', JSON.stringify(softwareList)); }, [softwareList]);
+  useEffect(() => { localStorage.setItem('custom_software_categories', JSON.stringify(softwareCategories)); }, [softwareCategories]);
+
+  // ─── CRUD helpers for admin settings ───
+  const handleAddSkill = () => {
+    const newSkill: SkillItem = { name: 'New Skill', percentage: 50, subSkills: 'Describe sub-skills here' };
+    setSkillItems(prev => [...prev, newSkill]);
+  };
+  const handleUpdateSkill = (index: number, field: keyof SkillItem, value: string | number) => {
+    setSkillItems(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
+  };
+  const handleDeleteSkill = (index: number) => {
+    const skillName = skillItems[index]?.name;
+    setSkillItems(prev => prev.filter((_, i) => i !== index));
+    // Also remove from any category that references it
+    setSkillCategories(prev => prev.map(c => ({ ...c, itemNames: c.itemNames.filter(n => n !== skillName) })));
+  };
+
+  const handleAddSkillCategory = () => {
+    setSkillCategories(prev => [...prev, { name: 'NEW CATEGORY', iconName: 'sparkles', itemNames: [] }]);
+  };
+  const handleUpdateSkillCategory = (index: number, field: string, value: string | string[]) => {
+    setSkillCategories(prev => prev.map((c, i) => i === index ? { ...c, [field]: value } : c));
+  };
+  const handleDeleteSkillCategory = (index: number) => {
+    setSkillCategories(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddSoftware = () => {
+    const id = `sw_${Date.now()}`;
+    const newSw: SoftwareItem = { id, name: 'New Software', brandColor: 'text-white bg-[#111]', proficiency: 50, shortcut: 'N/A', description: 'Describe this software.' };
+    setSoftwareList(prev => [...prev, newSw]);
+  };
+  const handleUpdateSoftware = (index: number, field: keyof SoftwareItem, value: string | number) => {
+    setSoftwareList(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
+  };
+  const handleDeleteSoftware = (index: number) => {
+    const swName = softwareList[index]?.name;
+    setSoftwareList(prev => prev.filter((_, i) => i !== index));
+    setSoftwareCategories(prev => prev.map(c => ({ ...c, itemNames: c.itemNames.filter(n => n !== swName) })));
+  };
+
+  const handleAddSoftwareCategory = () => {
+    setSoftwareCategories(prev => [...prev, { name: 'NEW CATEGORY', iconName: 'sparkles', itemNames: [] }]);
+  };
+  const handleUpdateSoftwareCategory = (index: number, field: string, value: string | string[]) => {
+    setSoftwareCategories(prev => prev.map((c, i) => i === index ? { ...c, [field]: value } : c));
+  };
+  const handleDeleteSoftwareCategory = (index: number) => {
+    setSoftwareCategories(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const ICON_OPTIONS = ['video', 'flame', 'palette', 'layers', 'sliders', 'volume', 'sparkles'];
 
   const handleConnectSupabase = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1245,8 +1323,16 @@ export default function App() {
             <text x="7" y="20.5" fill="#00ff00" fontFamily="'Inter', system-ui, sans-serif" fontWeight="900" fontSize="12" letterSpacing="-0.5">CV</text>
           </svg>
         );
-      default:
-        return null;
+      default: {
+        // Dynamic fallback for custom software: generate 2-letter abbreviation
+        const abbr = name.split(' ').map(w => w[0]?.toUpperCase() || '').join('').slice(0, 2) || '??';
+        return (
+          <svg className="w-6 h-6 shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="4" fill="#000000" stroke="#00ff00" strokeWidth="1.5"/>
+            <text x="6" y="21" fill="#00ff00" fontFamily="'Inter', system-ui, sans-serif" fontWeight="900" fontSize="13" letterSpacing="-0.5">{abbr}</text>
+          </svg>
+        );
+      }
     }
   };
 
@@ -1618,11 +1704,22 @@ export default function App() {
           <div className="flex flex-col gap-4">
             <div className="text-[10px] text-zinc-500 uppercase tracking-[0.25em] font-mono flex items-center justify-between border-b border-[#1a1a1a] pb-2">
               <span>SOFTWARE DECK</span>
-              <span className="text-[9px] text-[#00ff00]/80">BY CATEGORY</span>
+              <div className="flex items-center gap-2">
+                {isAdmin && (
+                  <button
+                    onClick={() => { setAdminSettingsTab('software'); setIsAdminSettingsOpen(true); }}
+                    className="p-0.5 rounded text-zinc-500 hover:text-[#00ff00] transition-colors cursor-pointer"
+                    title="Customize Software Deck"
+                  >
+                    <Settings size={11} />
+                  </button>
+                )}
+                <span className="text-[9px] text-[#00ff00]/80">BY CATEGORY</span>
+              </div>
             </div>
             
             <div className="flex flex-col gap-4">
-              {SOFTWARE_CATEGORIES.map((category) => (
+              {softwareCategories.map((category) => (
                 <div key={category.name} className="flex flex-col gap-1.5">
                   {/* Category Header with Lucide categorized icon */}
                   <div className="flex items-center gap-2 text-[9px] text-zinc-400 font-mono font-bold tracking-wider uppercase bg-[#070707] border border-[#141414] px-2 py-1 rounded">
@@ -1633,7 +1730,7 @@ export default function App() {
                   {/* Category items list */}
                   <div className="flex flex-col gap-1.5 pl-1.5">
                     {category.itemNames.map((itemName) => {
-                      const soft = SOFTWARE_LIST.find(s => s.name === itemName);
+                      const soft = softwareList.find(s => s.name === itemName);
                       if (!soft) return null;
                       const isActive = selectedSoftware === soft.name;
                       return (
@@ -1997,11 +2094,20 @@ export default function App() {
           <div id="skills-section-root" className="flex flex-col gap-4">
             <div className="text-[10px] text-zinc-500 uppercase tracking-[0.25em] font-mono flex items-center gap-1.5 border-b border-[#1a1a1a] pb-2">
               <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00]" />
-              EXPERT SERVICES
+              <span className="flex-1">EXPERT SERVICES</span>
+              {isAdmin && (
+                <button
+                  onClick={() => { setAdminSettingsTab('skills'); setIsAdminSettingsOpen(true); }}
+                  className="p-0.5 rounded text-zinc-500 hover:text-[#00ff00] transition-colors cursor-pointer"
+                  title="Customize Expert Services"
+                >
+                  <Settings size={11} />
+                </button>
+              )}
             </div>
 
             <div className="flex flex-col gap-5">
-              {SKILL_CATEGORIES.map((category) => (
+              {skillCategories.map((category) => (
                 <div key={category.name} className="flex flex-col gap-1.5">
                   {/* Category Header with Dynamic Lucide Icon */}
                   <div className="flex items-center gap-2 text-[9px] text-zinc-400 font-mono font-bold tracking-wider uppercase bg-[#070707] border border-[#141414] px-2 py-1 rounded">
@@ -2012,7 +2118,7 @@ export default function App() {
                   {/* Skills lists inside category */}
                   <div className="flex flex-col gap-2 pl-1.5">
                     {category.itemNames.map((itemName) => {
-                      const skill = SKILL_ITEMS.find(s => s.name === itemName);
+                      const skill = skillItems.find(s => s.name === itemName);
                       if (!skill) return null;
                       const isActive = selectedSkill === skill.name;
                       return (
@@ -3158,6 +3264,373 @@ export default function App() {
 
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* --- ADMIN SETTINGS MODAL: Expert Services & Software Deck Customization --- */}
+      {isAdminSettingsOpen && isAdmin && (
+        <div
+          id="admin-settings-overlay"
+          className="fixed inset-0 z-[60] bg-black/95 flex items-start justify-center pt-10 sm:pt-14 p-3 sm:p-4 backdrop-blur-md overflow-y-auto animate-fade-in"
+          onClick={() => setIsAdminSettingsOpen(false)}
+        >
+          <div
+            className="w-full max-w-2xl bg-[#0a0a0a] border border-[#222] rounded-md shadow-2xl animate-scale-up max-h-[88vh] overflow-y-auto mb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-[#111] px-5 py-4 border-b border-[#222] flex justify-between items-center sticky top-0 z-10">
+              <div className="flex items-center gap-2 text-white">
+                <Settings size={14} className="text-[#00ff00]" />
+                <span className="font-extrabold tracking-tight text-xs sm:text-sm font-mono uppercase">
+                  ADMIN CUSTOMIZATION PANEL
+                </span>
+              </div>
+              <button
+                onClick={() => setIsAdminSettingsOpen(false)}
+                className="p-1 rounded text-zinc-400 hover:text-white cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Tab Navigation */}
+            <div className="flex border-b border-[#222] bg-[#080808] sticky top-[52px] z-10">
+              {([
+                { key: 'skills' as const, label: 'SKILLS' },
+                { key: 'categories' as const, label: 'CATEGORIES' },
+                { key: 'software' as const, label: 'SOFTWARE DECK' }
+              ]).map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setAdminSettingsTab(tab.key)}
+                  className={`flex-1 px-3 py-2.5 text-[9px] font-mono font-bold uppercase tracking-widest transition-colors cursor-pointer ${
+                    adminSettingsTab === tab.key
+                      ? 'text-[#00ff00] border-b-2 border-[#00ff00] bg-[#0a0a0a]'
+                      : 'text-zinc-500 hover:text-zinc-300 border-b-2 border-transparent'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab Content */}
+            <div className="p-5">
+
+              {/* ──── TAB 1: SKILLS ──── */}
+              {adminSettingsTab === 'skills' && (
+                <div className="flex flex-col gap-4 animate-fade-in">
+                  <div className="text-[10px] text-[#00ff00] font-mono uppercase tracking-[0.2em]">
+                    | Manage expert service skills — adjust percentages, names, and descriptions.
+                  </div>
+
+                  {skillItems.map((skill, idx) => (
+                    <div key={idx} className="bg-[#080808] border border-[#1a1a1a] rounded p-3.5 flex flex-col gap-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 flex flex-col gap-2">
+                          <input
+                            type="text"
+                            value={skill.name}
+                            onChange={(e) => handleUpdateSkill(idx, 'name', e.target.value)}
+                            className="bg-black border border-[#1a1a1a] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono uppercase tracking-wider w-full"
+                            placeholder="Skill Name"
+                          />
+                          <input
+                            type="text"
+                            value={skill.subSkills}
+                            onChange={(e) => handleUpdateSkill(idx, 'subSkills', e.target.value)}
+                            className="bg-black border border-[#1a1a1a] rounded px-2.5 py-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-[#00ff00] font-mono w-full"
+                            placeholder="Sub-skills description"
+                          />
+                        </div>
+                        <button
+                          onClick={() => handleDeleteSkill(idx)}
+                          className="p-1.5 rounded text-zinc-500 hover:text-red-400 hover:bg-red-950/30 transition-colors cursor-pointer shrink-0"
+                          title="Remove skill"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+
+                      {/* Percentage Slider */}
+                      <div className="flex items-center gap-3">
+                        <span className="text-[9px] font-mono text-zinc-400 uppercase tracking-wider w-20 shrink-0">LEVEL</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={skill.percentage}
+                          onChange={(e) => handleUpdateSkill(idx, 'percentage', parseInt(e.target.value))}
+                          className="flex-1 h-1.5 bg-[#111] rounded-full appearance-none cursor-pointer accent-[#00ff00]"
+                          style={{
+                            background: `linear-gradient(to right, #00ff00 0%, #00ff00 ${skill.percentage}%, #111 ${skill.percentage}%, #111 100%)`
+                          }}
+                        />
+                        <span className="text-sm font-mono font-extrabold text-[#00ff00] w-12 text-right">{skill.percentage}%</span>
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    onClick={handleAddSkill}
+                    className="w-full py-2.5 border border-dashed border-[#333] rounded text-[10px] font-mono text-zinc-400 hover:text-[#00ff00] hover:border-[#00ff00]/50 transition-colors cursor-pointer flex items-center justify-center gap-1.5 uppercase tracking-widest"
+                  >
+                    <Plus size={12} /> ADD NEW SKILL
+                  </button>
+                </div>
+              )}
+
+              {/* ──── TAB 2: SKILL CATEGORIES ──── */}
+              {adminSettingsTab === 'categories' && (
+                <div className="flex flex-col gap-4 animate-fade-in">
+                  <div className="text-[10px] text-[#00ff00] font-mono uppercase tracking-[0.2em]">
+                    | Organize skills into categories — assign icons and group skills together.
+                  </div>
+
+                  {skillCategories.map((cat, idx) => (
+                    <div key={idx} className="bg-[#080808] border border-[#1a1a1a] rounded p-3.5 flex flex-col gap-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-1">
+                          <input
+                            type="text"
+                            value={cat.name}
+                            onChange={(e) => handleUpdateSkillCategory(idx, 'name', e.target.value)}
+                            className="bg-black border border-[#1a1a1a] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono uppercase tracking-wider flex-1"
+                            placeholder="Category Name"
+                          />
+                          <select
+                            value={cat.iconName}
+                            onChange={(e) => handleUpdateSkillCategory(idx, 'iconName', e.target.value)}
+                            className="bg-black border border-[#1a1a1a] rounded px-2 py-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-[#00ff00] font-mono uppercase cursor-pointer"
+                          >
+                            {ICON_OPTIONS.map(ic => (
+                              <option key={ic} value={ic}>{ic.toUpperCase()}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteSkillCategory(idx)}
+                          className="p-1.5 rounded text-zinc-500 hover:text-red-400 hover:bg-red-950/30 transition-colors cursor-pointer shrink-0"
+                          title="Remove category"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+
+                      {/* Skill assignment checkboxes */}
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest">ASSIGNED SKILLS:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {skillItems.map(skill => {
+                            const isAssigned = cat.itemNames.includes(skill.name);
+                            return (
+                              <label
+                                key={skill.name}
+                                className={`flex items-center gap-1 px-2 py-1 rounded border text-[9px] font-mono cursor-pointer transition-colors ${
+                                  isAssigned
+                                    ? 'border-[#00ff00]/40 bg-[#00ff00]/5 text-[#00ff00]'
+                                    : 'border-[#1a1a1a] text-zinc-500 hover:border-zinc-700'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isAssigned}
+                                  onChange={() => {
+                                    const newItems = isAssigned
+                                      ? cat.itemNames.filter(n => n !== skill.name)
+                                      : [...cat.itemNames, skill.name];
+                                    handleUpdateSkillCategory(idx, 'itemNames', newItems);
+                                  }}
+                                  className="sr-only"
+                                />
+                                <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center shrink-0 ${
+                                  isAssigned ? 'border-[#00ff00] bg-[#00ff00]' : 'border-zinc-600'
+                                }`}>
+                                  {isAssigned && <span className="text-black text-[7px] font-bold">✓</span>}
+                                </span>
+                                {skill.name}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    onClick={handleAddSkillCategory}
+                    className="w-full py-2.5 border border-dashed border-[#333] rounded text-[10px] font-mono text-zinc-400 hover:text-[#00ff00] hover:border-[#00ff00]/50 transition-colors cursor-pointer flex items-center justify-center gap-1.5 uppercase tracking-widest"
+                  >
+                    <Plus size={12} /> ADD NEW CATEGORY
+                  </button>
+                </div>
+              )}
+
+              {/* ──── TAB 3: SOFTWARE DECK ──── */}
+              {adminSettingsTab === 'software' && (
+                <div className="flex flex-col gap-4 animate-fade-in">
+                  <div className="text-[10px] text-[#00ff00] font-mono uppercase tracking-[0.2em]">
+                    | Manage software tools — add, remove, and configure proficiency levels.
+                  </div>
+
+                  {/* Software Items */}
+                  <div className="text-[9px] font-mono text-zinc-400 uppercase tracking-widest border-b border-[#1a1a1a] pb-1">SOFTWARE ITEMS</div>
+                  {softwareList.map((sw, idx) => (
+                    <div key={idx} className="bg-[#080808] border border-[#1a1a1a] rounded p-3.5 flex flex-col gap-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            value={sw.name}
+                            onChange={(e) => handleUpdateSoftware(idx, 'name', e.target.value)}
+                            className="bg-black border border-[#1a1a1a] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono"
+                            placeholder="Software Name"
+                          />
+                          <input
+                            type="text"
+                            value={sw.shortcut}
+                            onChange={(e) => handleUpdateSoftware(idx, 'shortcut', e.target.value)}
+                            className="bg-black border border-[#1a1a1a] rounded px-2.5 py-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-[#00ff00] font-mono"
+                            placeholder="Keyboard Shortcut"
+                          />
+                        </div>
+                        <button
+                          onClick={() => handleDeleteSoftware(idx)}
+                          className="p-1.5 rounded text-zinc-500 hover:text-red-400 hover:bg-red-950/30 transition-colors cursor-pointer shrink-0"
+                          title="Remove software"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+
+                      <input
+                        type="text"
+                        value={sw.description}
+                        onChange={(e) => handleUpdateSoftware(idx, 'description', e.target.value)}
+                        className="bg-black border border-[#1a1a1a] rounded px-2.5 py-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-[#00ff00] font-mono w-full"
+                        placeholder="Description"
+                      />
+
+                      {/* Proficiency Slider */}
+                      <div className="flex items-center gap-3">
+                        <span className="text-[9px] font-mono text-zinc-400 uppercase tracking-wider w-20 shrink-0">PROFICIENCY</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={sw.proficiency}
+                          onChange={(e) => handleUpdateSoftware(idx, 'proficiency', parseInt(e.target.value))}
+                          className="flex-1 h-1.5 bg-[#111] rounded-full appearance-none cursor-pointer accent-[#00ff00]"
+                          style={{
+                            background: `linear-gradient(to right, #00ff00 0%, #00ff00 ${sw.proficiency}%, #111 ${sw.proficiency}%, #111 100%)`
+                          }}
+                        />
+                        <span className="text-sm font-mono font-extrabold text-[#00ff00] w-12 text-right">{sw.proficiency}%</span>
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    onClick={handleAddSoftware}
+                    className="w-full py-2.5 border border-dashed border-[#333] rounded text-[10px] font-mono text-zinc-400 hover:text-[#00ff00] hover:border-[#00ff00]/50 transition-colors cursor-pointer flex items-center justify-center gap-1.5 uppercase tracking-widest"
+                  >
+                    <Plus size={12} /> ADD NEW SOFTWARE
+                  </button>
+
+                  {/* Software Categories */}
+                  <div className="text-[9px] font-mono text-zinc-400 uppercase tracking-widest border-b border-[#1a1a1a] pb-1 mt-4">SOFTWARE CATEGORIES</div>
+                  {softwareCategories.map((cat, idx) => (
+                    <div key={idx} className="bg-[#080808] border border-[#1a1a1a] rounded p-3.5 flex flex-col gap-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-1">
+                          <input
+                            type="text"
+                            value={cat.name}
+                            onChange={(e) => handleUpdateSoftwareCategory(idx, 'name', e.target.value)}
+                            className="bg-black border border-[#1a1a1a] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#00ff00] font-mono uppercase tracking-wider flex-1"
+                            placeholder="Category Name"
+                          />
+                          <select
+                            value={cat.iconName}
+                            onChange={(e) => handleUpdateSoftwareCategory(idx, 'iconName', e.target.value)}
+                            className="bg-black border border-[#1a1a1a] rounded px-2 py-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-[#00ff00] font-mono uppercase cursor-pointer"
+                          >
+                            {ICON_OPTIONS.map(ic => (
+                              <option key={ic} value={ic}>{ic.toUpperCase()}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteSoftwareCategory(idx)}
+                          className="p-1.5 rounded text-zinc-500 hover:text-red-400 hover:bg-red-950/30 transition-colors cursor-pointer shrink-0"
+                          title="Remove category"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+
+                      {/* Software assignment checkboxes */}
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest">ASSIGNED SOFTWARE:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {softwareList.map(sw => {
+                            const isAssigned = cat.itemNames.includes(sw.name);
+                            return (
+                              <label
+                                key={sw.name}
+                                className={`flex items-center gap-1 px-2 py-1 rounded border text-[9px] font-mono cursor-pointer transition-colors ${
+                                  isAssigned
+                                    ? 'border-[#00ff00]/40 bg-[#00ff00]/5 text-[#00ff00]'
+                                    : 'border-[#1a1a1a] text-zinc-500 hover:border-zinc-700'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isAssigned}
+                                  onChange={() => {
+                                    const newItems = isAssigned
+                                      ? cat.itemNames.filter(n => n !== sw.name)
+                                      : [...cat.itemNames, sw.name];
+                                    handleUpdateSoftwareCategory(idx, 'itemNames', newItems);
+                                  }}
+                                  className="sr-only"
+                                />
+                                <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center shrink-0 ${
+                                  isAssigned ? 'border-[#00ff00] bg-[#00ff00]' : 'border-zinc-600'
+                                }`}>
+                                  {isAssigned && <span className="text-black text-[7px] font-bold">✓</span>}
+                                </span>
+                                {sw.name}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    onClick={handleAddSoftwareCategory}
+                    className="w-full py-2.5 border border-dashed border-[#333] rounded text-[10px] font-mono text-zinc-400 hover:text-[#00ff00] hover:border-[#00ff00]/50 transition-colors cursor-pointer flex items-center justify-center gap-1.5 uppercase tracking-widest"
+                  >
+                    <Plus size={12} /> ADD NEW CATEGORY
+                  </button>
+                </div>
+              )}
+
+            </div>
+
+            {/* Footer */}
+            <div className="sticky bottom-0 bg-[#0a0a0a] border-t border-[#222] px-5 py-3 flex justify-end">
+              <button
+                onClick={() => setIsAdminSettingsOpen(false)}
+                className="px-5 py-2 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold text-xs font-mono rounded transition-transform active:scale-95 cursor-pointer uppercase"
+              >
+                DONE
+              </button>
+            </div>
           </div>
         </div>
       )}
