@@ -2513,11 +2513,11 @@ export default function App() {
       {isUploadOpen && (
         <div 
           id="upload-dialog-overlay" 
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm overflow-y-auto animate-fade-in"
+          className="fixed inset-0 z-50 bg-black/90 flex items-start justify-center pt-16 sm:pt-20 p-3 sm:p-4 backdrop-blur-sm overflow-y-auto animate-fade-in"
           onClick={() => setIsUploadOpen(false)}
         >
           <div 
-            className="w-full max-w-lg bg-[#0a0a0a] border border-[#222] rounded-md overflow-hidden shadow-2xl animate-scale-up"
+            className="w-full max-w-lg bg-[#0a0a0a] border border-[#222] rounded-md shadow-2xl animate-scale-up max-h-[85vh] overflow-y-auto mb-8"
             onClick={(e) => e.stopPropagation()} 
           >
             
@@ -2885,11 +2885,11 @@ export default function App() {
       {editingProject && (
         <div 
           id="edit-dialog-overlay" 
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm overflow-y-auto animate-fade-in"
+          className="fixed inset-0 z-50 bg-black/90 flex items-start justify-center pt-16 sm:pt-20 p-3 sm:p-4 backdrop-blur-sm overflow-y-auto animate-fade-in"
           onClick={() => setEditingProject(null)}
         >
           <div 
-            className="w-full max-w-lg bg-[#0a0a0a] border border-[#222] rounded-md overflow-hidden shadow-2xl animate-scale-up"
+            className="w-full max-w-lg bg-[#0a0a0a] border border-[#222] rounded-md shadow-2xl animate-scale-up max-h-[85vh] overflow-y-auto mb-8"
             onClick={(e) => e.stopPropagation()} 
           >
             
