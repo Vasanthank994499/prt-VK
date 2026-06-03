@@ -4,8 +4,10 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  const base = process.env.GITHUB_ACTIONS === 'true' ? '/prt-VK/' : '/';
+
   return {
-    base: '/prt-VK/',
+    base,
     plugins: [react(), tailwindcss()],
     build: {
       outDir: 'dist',
