@@ -139,11 +139,18 @@ export const updateSupabaseCredentials = (url: string, key: string) => {
   
   const valid = checkValidConfig(url.trim(), key.trim());
   if (valid) {
-    supabaseClient = createClient(url.trim(), key.trim());
+    try {
+      supabaseClient = createClient(url.trim(), key.trim());
+      return true;
+    } catch (err) {
+      console.error('Failed to initialize Supabase client:', err);
+      supabaseClient = getProxyClient();
+      return false;
+    }
   } else {
     supabaseClient = getProxyClient();
+    return false;
   }
-  return valid;
 };
 
 export const clearSupabaseCredentials = () => {

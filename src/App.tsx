@@ -23,7 +23,8 @@ import {
   Sparkles,
   Github,
   Edit,
-  Settings
+  Settings,
+  Database
 } from 'lucide-react';
 
 import { supabase, hasSupabaseConfig, updateSupabaseCredentials, clearSupabaseCredentials } from './supabase';
@@ -338,6 +339,7 @@ export default function App() {
   const [passcodeInput, setPasscodeInput] = useState('');
   const [authError, setAuthError] = useState('');
   const [githubAuthError, setGithubAuthError] = useState<string>('');
+  const [isValidatingDb, setIsValidatingDb] = useState(false);
   const [inputUrl, setInputUrl] = useState(() => localStorage.getItem('VITE_SUPABASE_URL') || '');
   const [inputKey, setInputKey] = useState(() => localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
   const [isConfiguredState, setIsConfiguredState] = useState(() => hasSupabaseConfig());
@@ -417,22 +419,40 @@ export default function App() {
 
   const ICON_OPTIONS = ['video', 'flame', 'palette', 'layers', 'sliders', 'volume', 'sparkles'];
 
-  const handleConnectSupabase = (e: React.FormEvent) => {
+  const handleConnectSupabase = async (e: React.FormEvent) => {
     e.preventDefault();
     setGithubAuthError('');
+    setIsValidatingDb(true);
     
     const urlClean = inputUrl.trim();
     if (urlClean.includes('supabase.com/dashboard') || urlClean.includes('supabase.com/orgs')) {
       setGithubAuthError('Error: You entered a Supabase Dashboard URL. Please use your Project API URL instead (e.g., https://your-project.supabase.co). Find this in Project Settings > API.');
+      setIsValidatingDb(false);
       return;
     }
 
     const success = updateSupabaseCredentials(inputUrl, inputKey);
     if (success) {
-      setIsConfiguredState(true);
-      fetchWorks();
+      try {
+        // Verify database and works table connection
+        const { error } = await supabase.from('works').select('id').limit(1);
+        if (error) throw error;
+        
+        setIsConfiguredState(true);
+        fetchWorks();
+      } catch (err: any) {
+        console.error('Database connection test failed:', err);
+        clearSupabaseCredentials();
+        setIsConfiguredState(false);
+        setGithubAuthError(`Database connection test failed. Connected to server but failed to query "works" table: ${err?.message || String(err)}. Ensure you have run the database setup script.`);
+      } finally {
+        setIsValidatingDb(false);
+      }
     } else {
+      clearSupabaseCredentials();
+      setIsConfiguredState(false);
       setGithubAuthError('Connection failed: invalid credentials format. Make sure the URL starts with https:// and the Anon key is a valid JWT token.');
+      setIsValidatingDb(false);
     }
   };
 
@@ -2202,10 +2222,25 @@ export default function App() {
               
               <div className="border-t border-[#161616] pt-2.5">
                 <div className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">PRO-CONSOLE ACTIVE TIME</div>
-                <div className="text-sm font-mono font-bold tracking-widest text-[#00ff00] mt-1 flex items-center gap-2">
+                <div className="text-sm font-mono font-bold tracking-widest text-[#00ff00] mt-1 flex items-center gap-2 mb-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] animate-ping" />
                   <span>{currentTime || '10:33:02 UTC'}</span>
                 </div>
+                
+                <button
+                  type="button"
+                  onClick={() => setIsAdminAuthOpen(true)}
+                  className={`w-full mt-2 py-1.5 border font-extrabold font-mono text-[9px] tracking-wider rounded transition-colors flex items-center justify-center gap-1.5 cursor-pointer uppercase ${
+                    isAdmin
+                      ? 'bg-emerald-950/60 border-emerald-800 text-[#00ff00] hover:bg-[#00ff00] hover:text-black'
+                      : isConfiguredState
+                      ? 'bg-amber-950/60 border-amber-900 text-amber-500 hover:bg-[#00ff00] hover:text-black hover:border-transparent'
+                      : 'bg-zinc-950 border border-zinc-800 text-zinc-400 hover:bg-[#00ff00] hover:text-black hover:border-transparent'
+                  }`}
+                >
+                  <Database size={10} />
+                  {isAdmin ? '✓ ADMIN ACTIVE' : isConfiguredState ? 'CONNECT TO PRO-CONSOLE' : 'SUPABASE LOGIN'}
+                </button>
               </div>
             </div>
 
@@ -3786,6 +3821,55 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Collapsible Supabase SQL Setup Guide */}
+                  <div className="border border-[#222] rounded bg-zinc-950 p-2 text-[8px] font-mono text-zinc-400">
+                    <details className="cursor-pointer group">
+                      <summary className="text-[8px] text-[#00ff00] font-bold uppercase tracking-wider select-none outline-none flex items-center justify-between">
+                        <span>📋 VIEW SQL & STORAGE SETUP GUIDE</span>
+                        <span className="text-zinc-650 group-open:rotate-180 transition-transform">▼</span>
+                      </summary>
+                      <div className="mt-2 text-zinc-400 flex flex-col gap-2 border-t border-[#222] pt-2 max-h-[150px] overflow-y-auto pr-1 leading-normal">
+                        <p>
+                          To connect your own database, go to the <strong>SQL Editor</strong> in your Supabase Dashboard and run the following script:
+                        </p>
+                        <pre className="bg-black text-[7.5px] p-2 rounded border border-[#111] overflow-x-auto text-zinc-350 select-all font-mono whitespace-pre leading-normal">
+{`CREATE TABLE IF NOT EXISTS public.works (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  category TEXT,
+  type TEXT,
+  video_url TEXT,
+  thumbnail_url TEXT,
+  duration TEXT,
+  software_used TEXT[],
+  description TEXT,
+  fps TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Enable RLS
+ALTER TABLE public.works ENABLE ROW LEVEL SECURITY;
+
+-- Enable Public read access
+CREATE POLICY "Allow public read access" ON public.works
+  FOR SELECT USING (true);
+
+-- Enable all operations for anonymous clients
+CREATE POLICY "Allow all ops for anon" ON public.works
+  FOR ALL USING (true) WITH CHECK (true);`}
+                        </pre>
+                        <div className="border-t border-zinc-900 pt-1.5">
+                          <p className="text-amber-500 font-bold uppercase tracking-wider text-[7.5px] mb-0.5">
+                            ⚠️ Storage Setup Required
+                          </p>
+                          <p className="text-zinc-300">
+                            Create a public storage bucket named <strong className="text-white">vkportfolio</strong>. Add policies allowing public select access, and insert/update access for anonymous uploads.
+                          </p>
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+
                   {githubAuthError && (
                     <div className="mt-1 text-red-500 font-mono text-[8px] text-center border border-red-500/10 bg-red-950/20 p-2 rounded leading-normal">
                       ⚠️ {githubAuthError}
@@ -3794,9 +3878,10 @@ export default function App() {
 
                   <button
                     type="submit"
-                    className="w-full py-2 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[9px] rounded transition-transform active:scale-98 cursor-pointer uppercase mt-1"
+                    disabled={isValidatingDb}
+                    className={`w-full py-2 bg-[#00ff00] hover:bg-[#00dd00] text-black font-extrabold font-mono text-[9px] rounded transition-transform active:scale-98 cursor-pointer uppercase mt-1 ${isValidatingDb ? 'opacity-50 pointer-events-none' : ''}`}
                   >
-                    Connect & Validate Supabase
+                    {isValidatingDb ? 'VALIDATING CONNECTION...' : 'Connect & Validate Supabase'}
                   </button>
                 </form>
               )}
