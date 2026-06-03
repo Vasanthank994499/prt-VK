@@ -2220,6 +2220,7 @@ export default function App() {
                 </div>
               </div>
               
+              {isAdmin && (
               <div className="border-t border-[#161616] pt-2.5">
                 <div className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">PRO-CONSOLE ACTIVE TIME</div>
                 <div className="text-sm font-mono font-bold tracking-widest text-[#00ff00] mt-1 flex items-center gap-2 mb-2">
@@ -2230,18 +2231,13 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setIsAdminAuthOpen(true)}
-                  className={`w-full mt-2 py-1.5 border font-extrabold font-mono text-[9px] tracking-wider rounded transition-colors flex items-center justify-center gap-1.5 cursor-pointer uppercase ${
-                    isAdmin
-                      ? 'bg-emerald-950/60 border-emerald-800 text-[#00ff00] hover:bg-[#00ff00] hover:text-black'
-                      : isConfiguredState
-                      ? 'bg-amber-950/60 border-amber-900 text-amber-500 hover:bg-[#00ff00] hover:text-black hover:border-transparent'
-                      : 'bg-zinc-950 border border-zinc-800 text-zinc-400 hover:bg-[#00ff00] hover:text-black hover:border-transparent'
-                  }`}
+                  className="w-full mt-2 py-1.5 border font-extrabold font-mono text-[9px] tracking-wider rounded transition-colors flex items-center justify-center gap-1.5 cursor-pointer uppercase bg-emerald-950/60 border-emerald-800 text-[#00ff00] hover:bg-[#00ff00] hover:text-black"
                 >
                   <Database size={10} />
-                  {isAdmin ? '✓ ADMIN ACTIVE — SUPABASE CONNECTED' : isConfiguredState ? 'AUTHENTICATE ADMIN' : 'CONNECT SUPABASE & LOGIN'}
+                  ✓ ADMIN ACTIVE — SUPABASE CONNECTED
                 </button>
               </div>
+              )}
             </div>
 
             <div className="bg-[#0a0a0a] border border-[#1a1a1a] p-4 rounded-md flex justify-between items-center">
@@ -2255,7 +2251,8 @@ export default function App() {
             </div>
           </div>
 
-          {/* ═══ BUILD & DEPLOYMENT SESSION ═══ */}
+          {/* ═══ BUILD & DEPLOYMENT SESSION (Admin Only) ═══ */}
+          {isAdmin && (
           <div className="flex flex-col gap-3">
             <div className="text-[10px] text-zinc-500 uppercase tracking-[0.25em] font-mono border-b border-[#1a1a1a] pb-1.5">
               BUILD & DEPLOYMENT SESSION
@@ -2365,6 +2362,7 @@ export default function App() {
               </button>
             </div>
           </div>
+          )}
 
         </aside>
       </div>
@@ -2484,7 +2482,8 @@ export default function App() {
         </div>
       </footer>
 
-      {/* ═══════════════════════ BUILD & DEPLOYMENT SESSION — FULL WIDTH ═══════════════════════ */}
+      {/* ═══════════════════════ BUILD & DEPLOYMENT SESSION — FULL WIDTH (Admin Only) ═══════════════════════ */}
+      {isAdmin && (
       <section id="build-deployment-section" className="bg-[#020202] border-t border-[#1a1a1a] px-4 sm:px-8 py-8">
         <div className="max-w-5xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-[#1a1a1a] mb-6">
@@ -2677,6 +2676,7 @@ export default function App() {
           </div>
         </div>
       </section>
+      )}
 
       {/* --- LIGHTBOX MODAL: THE INTERACTIVE 'PRODUCTION MONITOR SUITE' --- */}
       {activeLightboxProject && (
