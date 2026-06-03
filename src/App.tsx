@@ -2220,7 +2220,6 @@ export default function App() {
                 </div>
               </div>
               
-              {isAdmin && (
               <div className="border-t border-[#161616] pt-2.5">
                 <div className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">PRO-CONSOLE ACTIVE TIME</div>
                 <div className="text-sm font-mono font-bold tracking-widest text-[#00ff00] mt-1 flex items-center gap-2 mb-2">
@@ -2228,6 +2227,7 @@ export default function App() {
                   <span>{currentTime || '10:33:02 UTC'}</span>
                 </div>
                 
+                {isAdmin && (
                 <button
                   type="button"
                   onClick={() => setIsAdminAuthOpen(true)}
@@ -2236,8 +2236,8 @@ export default function App() {
                   <Database size={10} />
                   ✓ ADMIN ACTIVE — SUPABASE CONNECTED
                 </button>
+                )}
               </div>
-              )}
             </div>
 
             <div className="bg-[#0a0a0a] border border-[#1a1a1a] p-4 rounded-md flex justify-between items-center">
