@@ -2239,7 +2239,7 @@ export default function App() {
                   }`}
                 >
                   <Database size={10} />
-                  {isAdmin ? '✓ ADMIN ACTIVE' : isConfiguredState ? 'CONNECT TO PRO-CONSOLE' : 'SUPABASE LOGIN'}
+                  {isAdmin ? '✓ ADMIN ACTIVE — SUPABASE CONNECTED' : isConfiguredState ? 'AUTHENTICATE ADMIN' : 'CONNECT SUPABASE & LOGIN'}
                 </button>
               </div>
             </div>
@@ -2252,6 +2252,117 @@ export default function App() {
               <div className="w-11 h-11 rounded-full border border-[#151515] bg-black flex items-center justify-center font-mono text-[10px] font-bold text-center text-[#00ff00]">
                 5.0★
               </div>
+            </div>
+          </div>
+
+          {/* ═══ BUILD & DEPLOYMENT SESSION ═══ */}
+          <div className="flex flex-col gap-3">
+            <div className="text-[10px] text-zinc-500 uppercase tracking-[0.25em] font-mono border-b border-[#1a1a1a] pb-1.5">
+              BUILD & DEPLOYMENT SESSION
+            </div>
+
+            <div className="bg-[#0a0a0a] border border-[#1a1a1a] p-4 rounded-md flex flex-col gap-3">
+              {/* GitHub Repository Link */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Github size={14} className="text-[#00ff00]" />
+                  <div>
+                    <div className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">REPOSITORY</div>
+                    <div className="text-[11px] font-bold font-mono text-white tracking-tight">prt-VK</div>
+                  </div>
+                </div>
+                <a
+                  href="https://github.com/Vasanthank994499/prt-VK"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[8px] text-[#00ff00] hover:underline font-mono flex items-center gap-1"
+                >
+                  <ExternalLink size={9} />
+                  VIEW ON GITHUB
+                </a>
+              </div>
+
+              <div className="border-t border-[#161616] pt-2.5 flex flex-col gap-2">
+                {/* Branch Status */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-wider">BRANCH</span>
+                  <span className="text-[9px] font-mono text-white font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] animate-pulse" />
+                    main
+                  </span>
+                </div>
+
+                {/* Build Status */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-wider">BUILD STATUS</span>
+                  <span className="text-[9px] font-mono text-[#00ff00] font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00]" />
+                    PASSING
+                  </span>
+                </div>
+
+                {/* Deploy Target */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-wider">DEPLOY TARGET</span>
+                  <span className="text-[9px] font-mono text-white font-bold">VERCEL + GH-PAGES</span>
+                </div>
+
+                {/* Framework */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-wider">FRAMEWORK</span>
+                  <span className="text-[9px] font-mono text-white font-bold">VITE + REACT 19</span>
+                </div>
+              </div>
+
+              <div className="border-t border-[#161616] pt-2.5 flex flex-col gap-1.5">
+                <a
+                  href="https://github.com/Vasanthank994499/prt-VK/actions"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-1.5 bg-zinc-950 border border-zinc-800 hover:border-[#00ff00] hover:bg-[#00ff00]/10 text-zinc-400 hover:text-[#00ff00] font-extrabold font-mono text-[8px] tracking-wider rounded transition-colors flex items-center justify-center gap-1.5 cursor-pointer uppercase"
+                >
+                  <Github size={10} />
+                  VIEW CI/CD ACTIONS
+                </a>
+                <a
+                  href="https://vercel.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-1.5 bg-zinc-950 border border-zinc-800 hover:border-[#00ff00] hover:bg-[#00ff00]/10 text-zinc-400 hover:text-[#00ff00] font-extrabold font-mono text-[8px] tracking-wider rounded transition-colors flex items-center justify-center gap-1.5 cursor-pointer uppercase"
+                >
+                  <ExternalLink size={10} />
+                  VERCEL DASHBOARD
+                </a>
+              </div>
+            </div>
+
+            {/* Supabase Connection Status Card */}
+            <div className="bg-[#0a0a0a] border border-[#1a1a1a] p-4 rounded-md flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Database size={14} className={isConfiguredState ? 'text-[#00ff00]' : 'text-zinc-600'} />
+                  <div>
+                    <div className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">DATABASE</div>
+                    <div className="text-[11px] font-bold font-mono text-white tracking-tight">Supabase</div>
+                  </div>
+                </div>
+                <span className={`text-[8px] font-mono font-bold uppercase tracking-wider flex items-center gap-1 ${isConfiguredState ? 'text-[#00ff00]' : 'text-zinc-600'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isConfiguredState ? 'bg-[#00ff00] animate-pulse' : 'bg-zinc-600'}`} />
+                  {isConfiguredState ? 'CONNECTED' : 'NOT CONNECTED'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAdminAuthOpen(true)}
+                className={`w-full py-1.5 border font-extrabold font-mono text-[8px] tracking-wider rounded transition-colors flex items-center justify-center gap-1.5 cursor-pointer uppercase ${
+                  isConfiguredState
+                    ? 'bg-emerald-950/30 border-emerald-800/50 text-[#00ff00] hover:bg-[#00ff00] hover:text-black'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:bg-[#00ff00] hover:text-black hover:border-transparent'
+                }`}
+              >
+                <Key size={9} />
+                {isConfiguredState ? (isAdmin ? '✓ ADMIN VERIFIED' : 'OPEN ADMIN LOGIN') : 'CONNECT SUPABASE'}
+              </button>
             </div>
           </div>
 
@@ -2372,6 +2483,200 @@ export default function App() {
           </span>
         </div>
       </footer>
+
+      {/* ═══════════════════════ BUILD & DEPLOYMENT SESSION — FULL WIDTH ═══════════════════════ */}
+      <section id="build-deployment-section" className="bg-[#020202] border-t border-[#1a1a1a] px-4 sm:px-8 py-8">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-[#1a1a1a] mb-6">
+            <div>
+              <div className="text-[10px] text-[#00ff00] font-mono uppercase tracking-[0.25em] mb-1.5 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] animate-pulse" />
+                <span>PRODUCTION PIPELINE</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tighter uppercase text-white">
+                BUILD & DEPLOYMENT
+              </h2>
+            </div>
+            <div className="text-[10px] text-zinc-500 font-mono text-left md:text-right">
+              <div>AUTO-DEPLOY: ON PUSH TO MAIN</div>
+              <div className="text-[#00ff00]">CI/CD: GITHUB ACTIONS + VERCEL</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* GitHub Repository Card */}
+            <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-md p-5 flex flex-col gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-[#111] border border-[#222] flex items-center justify-center">
+                  <Github size={18} className="text-white" />
+                </div>
+                <div>
+                  <div className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest">SOURCE CODE</div>
+                  <div className="text-sm font-bold font-mono text-white">GitHub Repository</div>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5 border-t border-[#161616] pt-3">
+                <div className="flex justify-between">
+                  <span className="text-[8px] text-zinc-500 font-mono">REPO</span>
+                  <span className="text-[9px] text-white font-mono font-bold">prt-VK</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[8px] text-zinc-500 font-mono">BRANCH</span>
+                  <span className="text-[9px] text-[#00ff00] font-mono font-bold flex items-center gap-1">
+                    <span className="w-1 h-1 rounded-full bg-[#00ff00]" />
+                    main
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[8px] text-zinc-500 font-mono">OWNER</span>
+                  <span className="text-[9px] text-white font-mono font-bold">Vasanthank994499</span>
+                </div>
+              </div>
+              <a
+                href="https://github.com/Vasanthank994499/prt-VK"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-auto w-full py-2 bg-zinc-950 border border-zinc-800 hover:border-[#00ff00] hover:bg-[#00ff00]/10 text-zinc-400 hover:text-[#00ff00] font-bold font-mono text-[9px] tracking-wider rounded transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase"
+              >
+                <ExternalLink size={10} />
+                OPEN REPOSITORY
+              </a>
+            </div>
+
+            {/* Deployment Status Card */}
+            <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-md p-5 flex flex-col gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-[#0d1f0d] border border-[#1a3a1a] flex items-center justify-center">
+                  <Sparkles size={18} className="text-[#00ff00]" />
+                </div>
+                <div>
+                  <div className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest">LIVE DEPLOYMENT</div>
+                  <div className="text-sm font-bold font-mono text-white">Production Build</div>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5 border-t border-[#161616] pt-3">
+                <div className="flex justify-between">
+                  <span className="text-[8px] text-zinc-500 font-mono">STATUS</span>
+                  <span className="text-[9px] text-[#00ff00] font-mono font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] animate-pulse" />
+                    DEPLOYED
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[8px] text-zinc-500 font-mono">FRAMEWORK</span>
+                  <span className="text-[9px] text-white font-mono font-bold">Vite + React 19</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[8px] text-zinc-500 font-mono">NODE</span>
+                  <span className="text-[9px] text-white font-mono font-bold">≥ 20.0.0</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[8px] text-zinc-500 font-mono">BUILD</span>
+                  <span className="text-[9px] text-[#00ff00] font-mono font-bold">✓ PASSING</span>
+                </div>
+              </div>
+              <a
+                href="https://github.com/Vasanthank994499/prt-VK/actions"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-auto w-full py-2 bg-zinc-950 border border-zinc-800 hover:border-[#00ff00] hover:bg-[#00ff00]/10 text-zinc-400 hover:text-[#00ff00] font-bold font-mono text-[9px] tracking-wider rounded transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase"
+              >
+                <ExternalLink size={10} />
+                VIEW CI/CD PIPELINE
+              </a>
+            </div>
+
+            {/* Supabase Connection Card */}
+            <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-md p-5 flex flex-col gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-lg border flex items-center justify-center ${
+                  isConfiguredState ? 'bg-[#0d1f0d] border-[#1a3a1a]' : 'bg-[#111] border-[#222]'
+                }`}>
+                  <Database size={18} className={isConfiguredState ? 'text-[#00ff00]' : 'text-zinc-500'} />
+                </div>
+                <div>
+                  <div className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest">DATABASE</div>
+                  <div className="text-sm font-bold font-mono text-white">Supabase Backend</div>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5 border-t border-[#161616] pt-3">
+                <div className="flex justify-between">
+                  <span className="text-[8px] text-zinc-500 font-mono">CONNECTION</span>
+                  <span className={`text-[9px] font-mono font-bold flex items-center gap-1 ${
+                    isConfiguredState ? 'text-[#00ff00]' : 'text-red-500'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      isConfiguredState ? 'bg-[#00ff00] animate-pulse' : 'bg-red-500'
+                    }`} />
+                    {isConfiguredState ? 'ACTIVE' : 'DISCONNECTED'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[8px] text-zinc-500 font-mono">ADMIN</span>
+                  <span className={`text-[9px] font-mono font-bold ${
+                    isAdmin ? 'text-[#00ff00]' : 'text-zinc-500'
+                  }`}>
+                    {isAdmin ? '✓ AUTHENTICATED' : 'NOT LOGGED IN'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[8px] text-zinc-500 font-mono">REALTIME</span>
+                  <span className={`text-[9px] font-mono font-bold ${
+                    isConfiguredState ? 'text-[#00ff00]' : 'text-zinc-500'
+                  }`}>
+                    {isConfiguredState ? 'LISTENING' : 'INACTIVE'}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAdminAuthOpen(true)}
+                className={`mt-auto w-full py-2 border font-bold font-mono text-[9px] tracking-wider rounded transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase ${
+                  isAdmin
+                    ? 'bg-emerald-950/30 border-emerald-800/50 text-[#00ff00] hover:bg-[#00ff00] hover:text-black'
+                    : isConfiguredState
+                    ? 'bg-amber-950/30 border-amber-900/50 text-amber-500 hover:bg-[#00ff00] hover:text-black hover:border-transparent'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:bg-[#00ff00] hover:text-black hover:border-transparent'
+                }`}
+              >
+                <Key size={10} />
+                {isAdmin ? '✓ SUPABASE CONNECTED & ADMIN ACTIVE' : isConfiguredState ? 'LOGIN AS ADMIN' : 'CONNECT SUPABASE & LOGIN'}
+              </button>
+            </div>
+          </div>
+
+          {/* Bottom Deploy Bar */}
+          <div className="mt-6 bg-[#0a0a0a] border border-[#1a1a1a] rounded-md px-5 py-3 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div className="flex items-center gap-4 text-[9px] font-mono text-zinc-500">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#00ff00] animate-pulse" />
+                <span className="text-[#00ff00] font-bold">PRODUCTION LIVE</span>
+              </span>
+              <span>LAST COMMIT: LATEST</span>
+              <span>DEPLOY: AUTO ON PUSH</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href="https://github.com/Vasanthank994499/prt-VK"
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1 bg-zinc-950 border border-zinc-800 hover:border-[#00ff00] text-zinc-400 hover:text-[#00ff00] font-bold font-mono text-[8px] rounded transition-all cursor-pointer uppercase flex items-center gap-1"
+              >
+                <Github size={9} />
+                GITHUB
+              </a>
+              <button
+                type="button"
+                onClick={() => setIsAdminAuthOpen(true)}
+                className="px-3 py-1 bg-[#00ff00]/10 border border-[#00ff00]/30 hover:bg-[#00ff00] text-[#00ff00] hover:text-black font-bold font-mono text-[8px] rounded transition-all cursor-pointer uppercase flex items-center gap-1"
+              >
+                <Database size={9} />
+                {isConfiguredState ? (isAdmin ? 'ADMIN PANEL' : 'ADMIN LOGIN') : 'SUPABASE LOGIN'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* --- LIGHTBOX MODAL: THE INTERACTIVE 'PRODUCTION MONITOR SUITE' --- */}
       {activeLightboxProject && (
